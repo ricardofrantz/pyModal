@@ -517,7 +517,7 @@ if __name__ == "__main__":
     threads_available = get_num_threads()
     print(f"Available CPU threads detected: {threads_available}")
     if os.environ.get("OMP_NUM_THREADS") is None:
-        print("Set OMP_NUM_THREADS to this value for maximum performance.")
+        print(f"export OMP_NUM_THREADS={threads_available} for maximum performance.")
 
     data_file = "./data/jetLES.mat"
 
