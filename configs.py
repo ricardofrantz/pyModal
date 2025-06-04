@@ -17,7 +17,6 @@ import numpy as np
 import scipy.linalg
 from scipy.linalg import eig
 from scipy.signal import find_peaks
-from tqdm import tqdm
 
 os.environ["OS_ACTIVITY_MODE"] = "disable"  # suppress macOS IMKClient logs
 """
