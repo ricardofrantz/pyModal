@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 
 # Third-party imports
 import numpy as np
-import scipy.linalg as eig
+from scipy.sparse import linalg as splinalg
 from tqdm import tqdm
 
 from configs import (
@@ -465,14 +465,12 @@ class BSMDAnalyzer(BaseAnalyzer):
             target_matrix = (Q_alpha @ Q_beta.conj().T) / Q_alpha.shape[1]  # Nspace x Nspace
 
             try:
-                # Perform SVD. U corresponds to modes1, V.conj().T to modes2, s to singular values
-                U, s, Vh = np.linalg.svd(target_matrix)
-
-                # Store the leading modes and singular value
-                self.modes1[i, :] = U[:, 0]  # Leading left singular vector
-                self.modes2[i, :] = Vh[0, :].conj()  # Leading right singular vector (conjugated)
-                self.eigenvalues[i] = s[0]  # Leading singular value (this is lambda_val for the triad)
-            except np.linalg.LinAlgError as e:
+                # Compute only the leading singular triplet for efficiency
+                u, s, vh = splinalg.svds(target_matrix, k=1)
+                self.modes1[i, :] = u[:, 0]
+                self.modes2[i, :] = vh[0, :].conj()
+                self.eigenvalues[i] = s[0]
+            except Exception as e:
                 print(f"SVD failed for triad {i} (St={st_alpha_target},{st_beta_target},{st_gamma_target}): {e}")
                 self.eigenvalues[i] = np.nan
                 self.modes1[i, :] = np.nan
