@@ -31,6 +31,7 @@ from utils import (
     load_mat_data,  # For example in __main__
     make_result_filename,
     spod_function,  # Core SPOD routine for SPODAnalyzer
+    print_summary,
 )
 
 
@@ -331,7 +332,7 @@ class SPODAnalyzer(BaseAnalyzer):
             plot_reconstruction_options (dict, optional): Options for `plot_reconstruction_error`.
                                                         Example: {'n_modes_max_error': 50}
         """
-        print(f"\n--- Starting SPOD Analysis for: {os.path.basename(self.file_path)} ---")
+        print(f"🔎 Starting SPOD analysis for {os.path.basename(self.file_path)}")
         start_total_time = time.time()
 
         self.load_and_preprocess()
@@ -344,6 +345,8 @@ class SPODAnalyzer(BaseAnalyzer):
 
         if plot_modes_options:
             self.plot_modes(**plot_modes_options)
+
+        print_summary("SPOD", self.results_dir, self.figures_dir)
 
     def plot_eigenvalues_v2(self, n_modes_line_plot=20, shading_cmap="inferno_r"):
         """Plot the SPOD eigenvalue spectrum (energy vs. Strouhal number) - Version 2.
@@ -590,8 +593,3 @@ if __name__ == "__main__":
     # Example of calling plot_eigenvalues_v2 directly if needed for specific params
     # analyzer.plot_eigenvalues_v2(n_modes_line_plot=15, shading_cmap='viridis_r')
 
-    print("\n--------------------------------------------")
-    print("SPOD analysis script finished.")
-    print(f"Results saved in: {os.path.abspath(RESULTS_DIR)}")
-    print(f"Figures saved in: {os.path.abspath(FIGURES_DIR)}")
-    print("--------------------------------------------")

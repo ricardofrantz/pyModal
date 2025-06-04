@@ -25,6 +25,13 @@ def make_result_filename(root, nfft, overlap, Ns, analysis):
     return f"{root}_Nfft{nfft}_ovlap{overlap}_{Ns}snapshots_{analysis}.hdf5"
 
 
+def print_summary(analysis: str, results_dir: str, figures_dir: str) -> None:
+    """Print a short summary of where results and figures were saved."""
+    print(f"✅ {analysis} analysis finished!")
+    print(f"📁 Results: {results_dir}")
+    print(f"📊 Figures: {figures_dir}")
+
+
 def load_jetles_data(file_path):
     """Load and preprocess data from HDF5 file with JetLES format."""
     print(f"Loading data from {file_path}")

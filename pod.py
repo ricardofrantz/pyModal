@@ -33,6 +33,7 @@ from utils import (
     load_jetles_data,
     load_mat_data,
     make_result_filename,  # For saving results
+    print_summary,
 )
 
 
@@ -743,7 +744,7 @@ class PODAnalyzer(BaseAnalyzer):
             check_orthogonality (bool, optional): If True, perform and print orthogonality checks.
                                                 Defaults to True.
         """
-        print(f"\n--- Starting POD Analysis for: {os.path.basename(self.file_path)} ---")
+        print(f"🔎 Starting POD analysis for {os.path.basename(self.file_path)}")
         start_total_time = time.time()
 
         # Load data and calculate weights via BaseAnalyzer's run method.
@@ -769,7 +770,10 @@ class PODAnalyzer(BaseAnalyzer):
             self.check_temporal_coefficient_orthogonality()
 
         end_total_time = time.time()
-        print(f"\nPOD analysis and plotting completed successfully in {end_total_time - start_total_time:.2f} seconds.")
+        print(
+            f"\nPOD analysis and plotting completed successfully in {end_total_time - start_total_time:.2f} seconds."
+        )
+        print_summary("POD", self.results_dir, self.figures_dir)
 
 
 # Example usage when the script is run directly
@@ -838,8 +842,3 @@ if __name__ == "__main__":
     # Run the full analysis and plotting pipeline
     pod_analyzer.run_analysis(plot_n_modes_spatial=n_modes_to_plot_spatial_main, plot_n_coeffs_time=n_coeffs_to_plot_time_main)
 
-    print("\n--------------------------------------------")
-    print("POD analysis script finished.")
-    print(f"Results saved in: {os.path.abspath(RESULTS_DIR)}")
-    print(f"Figures saved in: {os.path.abspath(FIGURES_DIR)}")
-    print("--------------------------------------------")
