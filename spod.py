@@ -237,21 +237,21 @@ class SPODAnalyzer(BaseAnalyzer):
 
         start_time = time.time()
 
-        nq = self.qhat.shape[1]  # Number of spatial points
-        n_freq_bins_from_qhat = self.qhat.shape[0]
+        num_space_points = self.qhat.shape[1]
+        num_freq_bins = self.qhat.shape[0]
 
         # Check if self.freq and self.St are consistent with qhat's frequency bins
-        if len(self.freq) != n_freq_bins_from_qhat:
-            print(f"Warning: self.freq length ({len(self.freq)}) mismatch with qhat bins ({n_freq_bins_from_qhat}). Recalculating.")
+        if len(self.freq) != num_freq_bins:
+            print(f"Warning: self.freq length ({len(self.freq)}) mismatch with qhat bins ({num_freq_bins}). Recalculating.")
             # Recalculate freq and St based on nfft and fs (from BaseAnalyzer)
-            self.freq = np.fft.rfftfreq(self.nfft, d=1.0 / self.fs)[:n_freq_bins_from_qhat]
+            self.freq = np.fft.rfftfreq(self.nfft, d=1.0 / self.fs)[:num_freq_bins]
             self.St = self.freq * self.L / self.U
             print(f"Realigned self.freq to {len(self.freq)} elements and self.St.")
 
-        # Initialize result arrays using n_freq_bins_from_qhat
-        self.eigenvalues = np.zeros((n_freq_bins_from_qhat, self.nblocks))
-        self.modes = np.zeros((n_freq_bins_from_qhat, nq, self.nblocks), dtype=complex)  # Spatial modes
-        self.time_coefficients = np.zeros((n_freq_bins_from_qhat, self.nblocks, self.nblocks), dtype=complex)  # Temporal coefficients
+        # Initialize result arrays using num_freq_bins
+        self.eigenvalues = np.zeros((num_freq_bins, self.nblocks))
+        self.modes = np.zeros((num_freq_bins, num_space_points, self.nblocks), dtype=complex)  # Spatial modes
+        self.time_coefficients = np.zeros((num_freq_bins, self.nblocks, self.nblocks), dtype=complex)  # Temporal coefficients
 
         print("Performing SPOD for each frequency...")
 
@@ -267,13 +267,13 @@ class SPODAnalyzer(BaseAnalyzer):
             return i, phi_freq, lambda_freq, psi_freq
 
         if self.n_threads > 1:
-            results = parallel_map(compute_freq, range(n_freq_bins_from_qhat), threads=self.n_threads)
+            results = parallel_map(compute_freq, range(num_freq_bins), threads=self.n_threads)
             for i, phi_freq, lambda_freq, psi_freq in results:
                 self.modes[i, :, :] = phi_freq
                 self.eigenvalues[i, :] = lambda_freq
                 self.time_coefficients[i, :, :] = psi_freq
         else:
-            for i in tqdm(range(n_freq_bins_from_qhat), desc="SPOD Computation", unit="freq"):
+            for i in tqdm(range(num_freq_bins), desc="SPOD Computation", unit="freq"):
                 _, phi_freq, lambda_freq, psi_freq = compute_freq(i)
                 self.modes[i, :, :] = phi_freq
                 self.eigenvalues[i, :] = lambda_freq
