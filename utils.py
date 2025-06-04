@@ -366,7 +366,8 @@ class BaseAnalyzer:
             print("Using uniform spatial weights (rectangular grid).")
 
         # Calculate derived parameters
-        self.nblocks = int(np.ceil((self.data["Ns"] - self.novlap) / (self.nfft - self.novlap)))
+        step = self.nfft - self.novlap
+        self.nblocks = 1 + int(np.floor((self.data["Ns"] - self.nfft) / step))
         self.fs = 1 / self.data["dt"]
 
         print(f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points")

@@ -333,11 +333,9 @@ class SPODAnalyzer(BaseAnalyzer):
         print(f"\n--- Starting SPOD Analysis for: {os.path.basename(self.file_path)} ---")
         start_total_time = time.time()
 
-        self.load_and_preprocess()
         super().run(compute_fft=True)  # Compute/load qhat before SPOD
         self.perform_spod()
         self.save_results()
-
         # Generate plots
         self.plot_eigenvalues_v2()  # Call the new plotting function
 
@@ -431,7 +429,89 @@ class SPODAnalyzer(BaseAnalyzer):
         print(f"SPOD eigenvalue plot (v2) saved to {plot_filename}")
 
     def plot_modes(self, modes_to_plot=None, freqs_to_plot=None, save_all_modes=False):
-        pass
+        """Plot spatial SPOD modes for selected frequencies and mode numbers.
+
+        Parameters
+        ----------
+        modes_to_plot : list[int], optional
+            Indices of the modes to plot. Defaults to the first four modes.
+        freqs_to_plot : list[float], optional
+            List of Strouhal numbers at which to plot the modes. If None the
+            frequency corresponding to the maximum energy is used.
+        save_all_modes : bool, optional
+            If True, generate a separate figure for each frequency in
+            ``freqs_to_plot``. Otherwise all requested modes for a single
+            frequency are plotted in one figure.
+        """
+
+        if self.modes.size == 0:
+            print("No SPOD modes to plot. Run perform_spod() first.")
+            return
+
+        Nx = self.data.get("Nx", int(np.sqrt(self.modes.shape[1])))
+        Ny = self.data.get("Ny", int(np.sqrt(self.modes.shape[1])))
+        is_2d_plot = (self.modes.shape[1] == Nx * Ny) and (Nx > 1 and Ny > 1)
+        x_coords = self.data.get("x", np.arange(Nx))
+        y_coords = self.data.get("y", np.arange(Ny))
+
+        if freqs_to_plot is None or len(freqs_to_plot) == 0:
+            idx = np.argmax(np.sum(self.eigenvalues, axis=1))
+            freqs_to_plot = [self.St[idx]] if self.St.size > 0 else [self.freq[idx]]
+
+        freq_indices = [np.argmin(np.abs(self.St - f)) for f in freqs_to_plot]
+
+        for f_idx in freq_indices:
+            available_modes = self.modes.shape[2]
+            if modes_to_plot is None:
+                modes_indices = list(range(min(4, available_modes)))
+            else:
+                modes_indices = [m for m in modes_to_plot if m < available_modes]
+                if not modes_indices:
+                    continue
+
+            num_modes = len(modes_indices)
+            num_cols = min(num_modes, 2)
+            num_rows = (num_modes + num_cols - 1) // num_cols
+
+            plt.figure(figsize=(6 * num_cols, 5 * num_rows))
+            for i, m_idx in enumerate(modes_indices):
+                plt.subplot(num_rows, num_cols, i + 1)
+                mode_to_plot = self.modes[f_idx, :, m_idx].real
+                if is_2d_plot:
+                    mode_reshaped = mode_to_plot.reshape(Nx, Ny)
+                    extent = (
+                        [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()]
+                        if x_coords.ndim == 1 and y_coords.ndim == 1
+                        else None
+                    )
+                    plt.imshow(
+                        mode_reshaped.T,
+                        aspect="auto",
+                        origin="lower",
+                        extent=extent,
+                        cmap=CMAP_SEQ,
+                    )
+                    plt.colorbar(label="Mode Amplitude")
+                    plt.xlabel("X")
+                    plt.ylabel("Y")
+                else:
+                    plt.plot(mode_to_plot)
+                    plt.xlabel("Spatial Index")
+                    plt.ylabel("Mode Amplitude")
+                plt.title(f"Mode {m_idx + 1}")
+
+            plt.tight_layout()
+            st_value = self.St[f_idx] if self.St.size > 0 else self.freq[f_idx]
+            plot_filename = os.path.join(
+                self.figures_dir,
+                f"{self.data_root}_SPOD_modes_St{st_value:.4f}.png",
+            )
+            plt.savefig(plot_filename, dpi=FIG_DPI, format=FIG_FORMAT)
+            plt.close()
+            print(f"SPOD mode plot saved to {plot_filename}")
+
+            if not save_all_modes:
+                break
 
 
 if __name__ == "__main__":
