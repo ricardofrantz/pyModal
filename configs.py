@@ -49,3 +49,42 @@ WINDOW_TYPE = "hamming"
 WINDOW_NORM = "power"
 
 # Other global options can be added here as needed
+
+
+def load_config(config_path):
+    """Load a JSON or YAML configuration file and override defaults.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the configuration file. Supported formats are JSON
+        and YAML (requires ``PyYAML``).
+    """
+
+    if not os.path.isfile(config_path):
+        raise FileNotFoundError(f"Config file '{config_path}' not found")
+
+    _, ext = os.path.splitext(config_path)
+    ext = ext.lower()
+
+    with open(config_path, "r") as f:
+        if ext in {".yml", ".yaml"}:
+            try:
+                import yaml
+            except Exception as exc:  # pragma: no cover - import error path
+                raise ImportError(
+                    "PyYAML must be installed to read YAML configuration files"
+                ) from exc
+            config = yaml.safe_load(f)
+        else:
+            config = json.load(f)
+
+    if not isinstance(config, dict):
+        raise ValueError("Configuration file must define a dictionary")
+
+    # Update any matching globals using upper-case keys
+    for key, value in config.items():
+        key_upper = key.upper()
+        if key_upper in globals():
+            globals()[key_upper] = value
+

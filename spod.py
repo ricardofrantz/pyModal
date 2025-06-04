@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import time
+import argparse
 
 import h5py
 import matplotlib.colors as colors
@@ -431,14 +432,98 @@ class SPODAnalyzer(BaseAnalyzer):
         print(f"SPOD eigenvalue plot (v2) saved to {plot_filename}")
 
     def plot_modes(self, modes_to_plot=None, freqs_to_plot=None, save_all_modes=False):
-        pass
+        """Plot spatial modes for selected mode indices and frequency bins.
+
+        Parameters
+        ----------
+        modes_to_plot : list of int, optional
+            Indices of the SPOD modes to display.  If ``None`` the first mode is
+            used.
+        freqs_to_plot : list of int or float, optional
+            Frequency bins or Strouhal numbers identifying which frequencies to
+            plot.  If values are floats they are interpreted as Strouhal numbers
+            and the closest available bin is selected.  When ``None`` the
+            frequency with maximum energy in the first mode is chosen.
+        save_all_modes : bool, optional
+            If ``True`` each mode is saved in a separate figure.  Otherwise all
+            requested modes for a frequency are plotted together.
+        """
+
+        if self.modes.size == 0 or self.St.size == 0:
+            print("No modes to plot. Run perform_spod() first.")
+            return
+
+        # Default selections
+        if modes_to_plot is None:
+            modes_to_plot = [0]
+        if freqs_to_plot is None:
+            dominant_idx = np.argmax(self.eigenvalues[:, 0])
+            freqs_to_plot = [dominant_idx]
+
+        # Convert frequency values to indices if necessary
+        freq_indices = []
+        for f in freqs_to_plot:
+            if isinstance(f, (int, np.integer)) and 0 <= f < len(self.St):
+                freq_indices.append(int(f))
+            else:
+                freq_indices.append(int(np.argmin(np.abs(self.St - float(f)))))
+
+        Nx = self.data.get("Nx", int(np.sqrt(self.modes.shape[1])))
+        Ny = self.data.get("Ny", int(np.sqrt(self.modes.shape[1])))
+        x_coords = self.data.get("x", np.arange(Nx))
+        y_coords = self.data.get("y", np.arange(Ny))
+
+        for f_idx in freq_indices:
+            st_val = self.St[f_idx]
+            n_modes = len(modes_to_plot)
+            ncols = min(n_modes, 4)
+            nrows = int(np.ceil(n_modes / ncols))
+            fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows), squeeze=False)
+            axes = axes.flatten()
+
+            im = None
+            for i, m_idx in enumerate(modes_to_plot):
+                if m_idx >= self.modes.shape[2]:
+                    continue
+                mode_real = self.modes[f_idx, :, m_idx].real
+                if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
+                    mode_2d = mode_real.reshape(Nx, Ny).T
+                    im = axes[i].contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
+                    axes[i].set_aspect("auto")
+                else:
+                    im = axes[i].plot(mode_real)
+                axes[i].set_title(f"Mode {m_idx + 1}")
+            for j in range(n_modes, len(axes)):
+                axes[j].axis('off')
+
+            if isinstance(im, list):
+                im = None  # For 1D plots contourf not used
+            if im is not None:
+                fig.colorbar(im, ax=axes[:n_modes], shrink=0.8, label="Re($\Phi$)")
+            fig.suptitle(f"SPOD Modes at St={st_val:.4f}")
+
+            plot_filename = os.path.join(
+                self.figures_dir,
+                f"{self.data_root}_SPOD_modes_St{st_val:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+            )
+            plt.savefig(plot_filename, dpi=FIG_DPI)
+            plt.close(fig)
+            print(f"SPOD mode plot saved to {plot_filename}")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run SPOD analysis")
+    parser.add_argument("--config", help="Path to JSON/YAML configuration file", default=None)
+    args = parser.parse_args()
+
+    if args.config:
+        from configs import load_config
+        load_config(args.config)
+
     # --- Configuration ---
-    # data_file = "./data/jetLES_small.mat" # Updated data path
+    # data_file = "./data/jetLES_small.mat"  # Updated data path
     data_file = "./data/jetLES.mat"  # Path to your data file
-    # data_file = "./data/cavityPIV.mat" # Path to your data file
+    # data_file = "./data/cavityPIV.mat"  # Path to your data file
 
     # Default parameters
     nfft_param = 128  # FFT block size
@@ -455,8 +540,15 @@ if __name__ == "__main__":
 
             data_file = "./data/dummy_jetles_data.h5"  # Create/use an HDF5 dummy file
             if not os.path.exists(data_file):
-                # Adjust Ns, Nx, Ny, Nt as needed for a small, quick test
-                generate_dummy_data_like_jetles(output_path=data_file, Ns=200, Nx=30, Ny=20, Nt=1, save_mat=False)
+                # Generate a small coherent dataset for quick testing
+                generate_dummy_data_like_jetles(
+                    output_path=data_file,
+                    Ns=200,
+                    Nx=30,
+                    Ny=20,
+                    dt=0.01,
+                    save_mat=False,
+                )
             print(f"Using dummy data: {data_file}")
         except ImportError:
             print("Dummy data generator 'generate_dummy_data_like_jetles' not found in utils.py. Exiting.")
