@@ -45,3 +45,8 @@ Install the dependencies and run the unit tests with:
 ```bash
 pytest
 ```
+
+### Parallel Execution
+
+Set the environment variable `OMP_NUM_THREADS` to control how many worker threads
+are used for FFT and SPOD computations. The default is `1`.

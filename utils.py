@@ -8,6 +8,7 @@ All imports are centralized here to keep the code clean and consistent.
 from configs import *
 from fft.fft_backends import get_fft_func
 from scipy.signal import get_window
+from parallel_utils import parallel_map, get_num_workers
 
 
 def make_result_filename(root, nfft, overlap, Ns, analysis):
@@ -272,7 +273,17 @@ def sine_window(n):
     return np.sin(np.pi * (np.arange(n) + 0.5) / n)
 
 
-def blocksfft(q, nfft, nblocks, novlap, blockwise_mean=False, normvar=False, window_norm="power", window_type="hamming"):
+def blocksfft(
+    q,
+    nfft,
+    nblocks,
+    novlap,
+    blockwise_mean=False,
+    normvar=False,
+    window_norm="power",
+    window_type="hamming",
+    n_workers=None,
+):
     """
     Compute blocked FFT using Welch's method for CSD estimation.
 
@@ -313,44 +324,33 @@ def blocksfft(q, nfft, nblocks, novlap, blockwise_mean=False, normvar=False, win
     nmesh = q.shape[1]  # Number of spatial points (Nx * Ny)
     n_freq_out = nfft // 2 + 1  # Number of frequency bins for one-sided spectrum
     q_hat = np.zeros((n_freq_out, nmesh, nblocks), dtype=complex)
-    q_mean = np.mean(q, axis=0)  # Temporal mean (long-time mean)
-    window_broadcast = window[:, np.newaxis]  # Reshape window for broadcasting
+    q_mean = np.mean(q, axis=0)
+    window_broadcast = window[:, np.newaxis]
 
-    # Process each block
-    for iblk in range(nblocks):
-        ts = min(iblk * (nfft - novlap), q.shape[0] - nfft)  # Start index
-        tf = np.arange(ts, ts + nfft)  # Time indices for the block
+    if n_workers is None:
+        n_workers = get_num_workers()
+
+    def process_block(iblk):
+        ts = min(iblk * (nfft - novlap), q.shape[0] - nfft)
+        tf = np.arange(ts, ts + nfft)
         block = q[tf, :]
-
-        # Subtract mean
         if blockwise_mean:
             block_mean = np.mean(block, axis=0)
         else:
             block_mean = q_mean
         block_centered = block - block_mean
-
-        # Normalize variance if requested
         if normvar:
             block_var = np.var(block_centered, axis=0, ddof=1)
-            block_var[block_var < 4 * np.finfo(float).eps] = 1.0  # Avoid division by zero
+            block_var[block_var < 4 * np.finfo(float).eps] = 1.0
             block_centered = block_centered / block_var
-
-        # Apply window and FFT
         fft_func = get_fft_func()
-        # Compute full FFT
         full_fft_result = fft_func(block_centered * window_broadcast, axis=0)
+        result = (cw / nfft) * full_fft_result[:n_freq_out, :]
+        return iblk, result
 
-        # --- Normalization explanation ---
-        # The FFT result is normalized by:
-        #   - cw: window normalization constant (either amplitude or power, see above)
-        #   - nfft: block length, to match standard FFT conventions (NumPy/SciPy FFTs are unnormalized by default)
-        # This ensures that:
-        #   - For 'power' normalization, the output power spectrum is consistent with Parseval's theorem (total energy preserved)
-        #   - For 'amplitude' normalization, the amplitude spectrum matches the input amplitude scaling
-        # Note: No further normalization by the total signal length is needed here, because Welch's method treats each block independently.
-        # When combining blocks (e.g., averaging periodograms), normalization by the number of blocks is handled outside this function.
-        # Store only the one-sided spectrum (first n_freq_out points)
-        q_hat[:, :, iblk] = (cw / nfft) * full_fft_result[:n_freq_out, :]
+    results = parallel_map(process_block, range(nblocks), workers=n_workers)
+    for iblk, block_fft in results:
+        q_hat[:, :, iblk] = block_fft
 
     return q_hat
 
@@ -403,7 +403,17 @@ def spod_function(qhat, nblocks, dst, w, return_psi=False):
 class BaseAnalyzer:
     """Base class for modal decomposition analyzers."""
 
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir="./preprocess", figures_dir="./figs", data_loader=None, spatial_weight_type="auto"):
+    def __init__(
+        self,
+        file_path,
+        nfft=128,
+        overlap=0.5,
+        results_dir="./preprocess",
+        figures_dir="./figs",
+        data_loader=None,
+        spatial_weight_type="auto",
+        n_workers=None,
+    ):
         """Initialize the analyzer.
 
         Args:
@@ -423,6 +433,7 @@ class BaseAnalyzer:
 
         # Set default data loader based on file type
         self.data_loader = data_loader or load_data
+        self.n_workers = n_workers if n_workers is not None else get_num_workers()
 
         # Set default weight type
         if spatial_weight_type == "auto":
@@ -471,8 +482,18 @@ class BaseAnalyzer:
         if "q" not in self.data:
             raise ValueError("Data not loaded. Call load_and_preprocess() first.")
 
-        print(f"Computing FFT with {self.nblocks} blocks...")
-        self.qhat = blocksfft(self.data["q"], self.nfft, self.nblocks, self.novlap, blockwise_mean=getattr(self, "blockwise_mean", False), normvar=getattr(self, "normvar", False), window_norm=getattr(self, "window_norm", "power"), window_type=getattr(self, "window_type", "hamming"))
+        print(f"Computing FFT with {self.nblocks} blocks using {self.n_workers} workers...")
+        self.qhat = blocksfft(
+            self.data["q"],
+            self.nfft,
+            self.nblocks,
+            self.novlap,
+            blockwise_mean=getattr(self, "blockwise_mean", False),
+            normvar=getattr(self, "normvar", False),
+            window_norm=getattr(self, "window_norm", "power"),
+            window_type=getattr(self, "window_type", "hamming"),
+            n_workers=self.n_workers,
+        )
         print("FFT computation complete.")
 
     def save_results(self, filename=None, analysis_type="spod"):
