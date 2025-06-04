@@ -32,7 +32,6 @@ from utils import (
     make_result_filename,
     print_summary,
     spod_function,  # Core SPOD routine for SPODAnalyzer
-    parallel_map,  # For parallel processing of SPOD modes
     get_num_threads,  # Utility to get number of available CPU threads
 )
 
@@ -146,6 +145,7 @@ class SPODAnalyzer(BaseAnalyzer):
         self.freq = np.array([])  # Frequencies (from rfft)
         self.St = np.array([])  # Strouhal numbers
         self.dst = 0.0  # Strouhal step (for spod_function integral weight)
+        self.qhat_cached = False  # Flag whether FFT blocks were loaded from cache
 
     def _validate_inputs(self):
         """
@@ -212,6 +212,47 @@ class SPODAnalyzer(BaseAnalyzer):
             self.dst = 0
 
     ############################################################
+    # FFT Block Caching                                        #
+    ############################################################
+    def compute_fft_blocks(self):
+        """Compute or load FFT blocks (qhat), with disk caching."""
+
+        filename = make_result_filename(
+            self.data_root,
+            self.nfft,
+            self.overlap,
+            self.data.get("Ns", 0),
+            self.analysis_type,
+        )
+        cache_path = os.path.join(self.results_dir, filename)
+
+        # Try loading cached FFT blocks from previous SPOD run
+        if os.path.exists(cache_path):
+            with h5py.File(cache_path, "r") as f:
+                if "FFTBlocks" in f:
+                    qhat_cached = f["FFTBlocks"][:]
+                    if qhat_cached.shape[0] == self.nfft // 2 + 1:
+                        self.qhat = qhat_cached
+                        self.nblocks = qhat_cached.shape[2]
+                        self.qhat_cached = True
+                        print(f"Loaded cached FFT blocks from {cache_path}")
+                        return
+
+        # Otherwise compute and save to cache
+        super().compute_fft_blocks()
+
+        os.makedirs(self.results_dir, exist_ok=True)
+        mode = "a" if os.path.exists(cache_path) else "w"
+        with h5py.File(cache_path, mode) as f:
+            if "FFTBlocks" in f:
+                del f["FFTBlocks"]
+            f.create_dataset("FFTBlocks", data=self.qhat, compression="gzip")
+            if mode == "w":
+                for key, value in self._get_metadata().items():
+                    f.attrs[key] = value
+        print(f"Saved FFT blocks to cache at {cache_path}")
+
+    ############################################################
     # Core SPOD Computation                                    #
     ############################################################
     def perform_spod(self):
@@ -255,7 +296,7 @@ class SPODAnalyzer(BaseAnalyzer):
 
         print("Performing SPOD for each frequency...")
 
-        def compute_freq(i):
+        for i in tqdm(range(num_freq_bins), desc="SPOD Computation", unit="freq"):
             qhat_freq = self.qhat[i, :, :]
             phi_freq, lambda_freq, psi_freq = spod_function(
                 qhat_freq,
@@ -264,20 +305,9 @@ class SPODAnalyzer(BaseAnalyzer):
                 self.W,
                 return_psi=True,
             )
-            return i, phi_freq, lambda_freq, psi_freq
-
-        if self.n_threads > 1:
-            results = parallel_map(compute_freq, range(num_freq_bins), threads=self.n_threads)
-            for i, phi_freq, lambda_freq, psi_freq in results:
-                self.modes[i, :, :] = phi_freq
-                self.eigenvalues[i, :] = lambda_freq
-                self.time_coefficients[i, :, :] = psi_freq
-        else:
-            for i in tqdm(range(num_freq_bins), desc="SPOD Computation", unit="freq"):
-                _, phi_freq, lambda_freq, psi_freq = compute_freq(i)
-                self.modes[i, :, :] = phi_freq
-                self.eigenvalues[i, :] = lambda_freq
-                self.time_coefficients[i, :, :] = psi_freq
+            self.modes[i, :, :] = phi_freq
+            self.eigenvalues[i, :] = lambda_freq
+            self.time_coefficients[i, :, :] = psi_freq
         print(f"SPOD eigenvalue decomposition completed in {time.time() - start_time:.2f} seconds")
 
     ############################################################
