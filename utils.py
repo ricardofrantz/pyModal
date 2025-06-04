@@ -5,10 +5,10 @@ Common utilities for modal decomposition methods.
 All imports are centralized here to keep the code clean and consistent.
 """
 from configs import *
-from fft.fft_backends import get_fft_func # avoid circular import issues
+from fft.fft_backends import get_fft_func
 
-def get_num_workers():
-    """Return worker count from ``OMP_NUM_THREADS`` or ``os.cpu_count()``."""
+def get_num_threads():
+    """Return thread count from ``OMP_NUM_THREADS`` or ``os.cpu_count()``."""
     env = os.environ.get("OMP_NUM_THREADS")
     try:
         val = int(env) if env is not None else None
@@ -20,13 +20,13 @@ def get_num_workers():
     return cpu
 
 
-def parallel_map(func, iterable, workers=None):
+def parallel_map(func, iterable, threads=None):
     """Map function over iterable using threads."""
-    workers = workers or get_num_workers()
-    if workers <= 1:
+    threads = threads or get_num_threads()
+    if threads <= 1:
         return [func(x) for x in iterable]
     results = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    with ThreadPoolExecutor(max_workers=threads) as pool:
         futures = [pool.submit(func, x) for x in iterable]
         for f in futures:
             results.append(f.result())
@@ -301,7 +301,7 @@ def blocksfft(
     normvar=False,
     window_norm="power",
     window_type="hamming",
-    n_workers=None,
+    n_threads=None,
 ):
     """
     Compute blocked FFT using Welch's method for CSD estimation.
@@ -346,8 +346,8 @@ def blocksfft(
     q_mean = np.mean(q, axis=0)
     window_broadcast = window[:, np.newaxis]
 
-    if n_workers is None:
-        n_workers = get_num_workers()
+    if n_threads is None:
+        n_threads = get_num_threads()
 
     def process_block(iblk):
         ts = min(iblk * (nfft - novlap), q.shape[0] - nfft)
@@ -367,7 +367,7 @@ def blocksfft(
         result = (cw / nfft) * full_fft_result[:n_freq_out, :]
         return iblk, result
 
-    results = parallel_map(process_block, range(nblocks), workers=n_workers)
+    results = parallel_map(process_block, range(nblocks), threads=n_threads)
     for iblk, block_fft in results:
         q_hat[:, :, iblk] = block_fft
 
@@ -431,7 +431,7 @@ class BaseAnalyzer:
         figures_dir="./figs",
         data_loader=None,
         spatial_weight_type="auto",
-        n_workers=None,
+        n_threads=None,
     ):
         """Initialize the analyzer.
 
@@ -452,7 +452,7 @@ class BaseAnalyzer:
 
         # Set default data loader based on file type
         self.data_loader = data_loader or load_data
-        self.n_workers = n_workers if n_workers is not None else get_num_workers()
+        self.n_threads = n_threads if n_threads is not None else get_num_threads()
 
         # Set default weight type
         if spatial_weight_type == "auto":
@@ -496,7 +496,7 @@ class BaseAnalyzer:
         print(f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points")
         if self.nfft > 1:
             print(
-                f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks"
+                f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]"
             )
 
     def compute_fft_blocks(self):
@@ -504,7 +504,9 @@ class BaseAnalyzer:
         if "q" not in self.data:
             raise ValueError("Data not loaded. Call load_and_preprocess() first.")
 
-        print(f"Computing FFT with {self.nblocks} blocks using {self.n_workers} workers...")
+        print(
+            f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend..."
+        )
         self.qhat = blocksfft(
             self.data["q"],
             self.nfft,
@@ -514,7 +516,7 @@ class BaseAnalyzer:
             normvar=getattr(self, "normvar", False),
             window_norm=getattr(self, "window_norm", "power"),
             window_type=getattr(self, "window_type", "hamming"),
-            n_workers=self.n_workers,
+            n_threads=self.n_threads,
         )
         print("FFT computation complete.")
 

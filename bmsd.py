@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt
 # Third-party imports
 import numpy as np
 import scipy.linalg as eig
+from tqdm import tqdm
 
 from configs import (
     FIGURES_DIR_BSMD,
@@ -48,7 +49,7 @@ from utils import (
     load_mat_data,  # If used in __main__
     make_result_filename,  # For saving results
     print_summary,
-    get_num_workers,  # For detecting available CPU threads
+    get_num_threads,  # For detecting available CPU threads
 )
 
 
@@ -373,7 +374,9 @@ class BSMDAnalyzer(BaseAnalyzer):
             print("Error: Frequency/Strouhal information not available. Cannot map triads.")
             return
 
-        for i, (st_alpha_target, st_beta_target, st_gamma_target) in enumerate(self.static_triads_list):
+        for i, (st_alpha_target, st_beta_target, st_gamma_target) in enumerate(
+            tqdm(self.static_triads_list, desc="BSMD Triads")
+        ):
             idx_alpha = find_closest_freq_idx(self.St, st_alpha_target)
             idx_beta = find_closest_freq_idx(self.St, st_beta_target)
             idx_gamma = find_closest_freq_idx(self.St, st_gamma_target)
@@ -513,7 +516,7 @@ if __name__ == "__main__":
     parser.add_argument("--plot", action="store_true", help="Generate example plots")
     args = parser.parse_args()
 
-    threads_available = get_num_workers()
+    threads_available = get_num_threads()
     print(f"Available CPU threads detected: {threads_available}")
     if os.environ.get("OMP_NUM_THREADS") is None:
         print("Set OMP_NUM_THREADS to this value for maximum performance.")

@@ -33,7 +33,7 @@ from utils import (
     print_summary,
     spod_function,  # Core SPOD routine for SPODAnalyzer
     parallel_map,  # For parallel processing of SPOD modes
-    get_num_workers,  # Utility to get number of available CPU threads
+    get_num_threads,  # Utility to get number of available CPU threads
 )
 
 
@@ -90,7 +90,7 @@ class SPODAnalyzer(BaseAnalyzer):
         window_type=WINDOW_TYPE,
         data_loader=None,
         spatial_weight_type="auto",
-        n_workers=None,
+        n_threads=None,
     ):
         """
         Initializes the SPODAnalyzer instance.
@@ -127,7 +127,7 @@ class SPODAnalyzer(BaseAnalyzer):
             figures_dir=figures_dir,
             data_loader=data_loader,
             spatial_weight_type=spatial_weight_type,
-            n_workers=n_workers,
+            n_threads=n_threads,
         )
 
         self._validate_inputs()
@@ -266,8 +266,8 @@ class SPODAnalyzer(BaseAnalyzer):
             )
             return i, phi_freq, lambda_freq, psi_freq
 
-        if self.n_workers > 1:
-            results = parallel_map(compute_freq, range(n_freq_bins_from_qhat), workers=self.n_workers)
+        if self.n_threads > 1:
+            results = parallel_map(compute_freq, range(n_freq_bins_from_qhat), threads=self.n_threads)
             for i, phi_freq, lambda_freq, psi_freq in results:
                 self.modes[i, :, :] = phi_freq
                 self.eigenvalues[i, :] = lambda_freq
@@ -602,7 +602,7 @@ if __name__ == "__main__":
     parser.add_argument("--plot", action="store_true", help="Generate default plots")
     args = parser.parse_args()
 
-    threads_available = get_num_workers()
+    threads_available = get_num_threads()
     print(f"Available CPU threads detected: {threads_available}")
     if os.environ.get("OMP_NUM_THREADS") is None:
         print("Set OMP_NUM_THREADS to this value for maximum performance.")
@@ -695,6 +695,7 @@ if __name__ == "__main__":
             print("No SPOD results to plot. Run with --compute first.")
         else:
             analyzer.plot_eigenvalues_v2()
+            analyzer.plot_modes()
 
     if run_all:
         print_summary("SPOD", analyzer.results_dir, analyzer.figures_dir)
