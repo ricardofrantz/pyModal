@@ -342,6 +342,13 @@ class PODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = x_coords.max() - x_coords.min()
+            dy = y_coords.max() - y_coords.min()
+            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+        else:
+            aspect_ratio = "auto"
+
         # Determine if plotting 1D or 2D modes
         is_2d_plot = (self.modes.shape[0] == Nx * Ny) and (Nx > 1 and Ny > 1)
 
@@ -359,7 +366,7 @@ class PODAnalyzer(BaseAnalyzer):
                 mode_reshaped = mode_to_plot.reshape(Nx, Ny)
                 # Determine extent for imshow if x,y are 1D arrays
                 extent = [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()] if x_coords.ndim == 1 and y_coords.ndim == 1 else None
-                plt.imshow(mode_reshaped.T, aspect="auto", origin="lower", extent=extent, cmap=CMAP_SEQ)
+                plt.imshow(mode_reshaped.T, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_SEQ)
                 plt.colorbar(label="Mode Amplitude")
                 plt.xlabel("X")
                 plt.ylabel("Y")
@@ -537,6 +544,13 @@ class PODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = x_coords.max() - x_coords.min()
+            dy = y_coords.max() - y_coords.min()
+            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+        else:
+            aspect_ratio = "auto"
+
         num_snapshots_to_show = len(snapshot_indices_to_plot)
         num_recons_per_snapshot = len(modes_for_reconstruction)
 
@@ -552,7 +566,7 @@ class PODAnalyzer(BaseAnalyzer):
             if is_2d_plot:
                 img_data = original_snapshot.reshape(Nx, Ny).T
                 extent = [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()] if x_coords.ndim == 1 and y_coords.ndim == 1 else None
-                im = ax.imshow(img_data, aspect="auto", origin="lower", extent=extent, cmap=CMAP_DIV)
+                im = ax.imshow(img_data, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_DIV)
                 fig.colorbar(im, ax=ax, label="Amplitude")
                 ax.set_xlabel("X")
                 ax.set_ylabel("Y")
@@ -572,7 +586,7 @@ class PODAnalyzer(BaseAnalyzer):
 
                 if is_2d_plot:
                     img_data_recon = reconstructed_snapshot_k.reshape(Nx, Ny).T
-                    im = ax.imshow(img_data_recon, aspect="auto", origin="lower", extent=extent, cmap=CMAP_DIV)
+                    im = ax.imshow(img_data_recon, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_DIV)
                     fig.colorbar(im, ax=ax, label="Amplitude")
                     ax.set_xlabel("X")
                     ax.set_ylabel("Y")
