@@ -473,7 +473,10 @@ class BaseAnalyzer:
         self.fs = 1 / self.data["dt"]
 
         print(f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points")
-        print(f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks")
+        if self.nfft > 1:
+            print(
+                f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks"
+            )
 
     def compute_fft_blocks(self):
         """Compute blocked FFT using Welch's method."""
