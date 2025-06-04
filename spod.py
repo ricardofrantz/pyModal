@@ -564,6 +564,9 @@ class SPODAnalyzer(BaseAnalyzer):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run SPOD analysis")
     parser.add_argument("--config", help="Path to JSON/YAML configuration file", default=None)
+    parser.add_argument("--prep", action="store_true", help="Load data and compute FFT blocks")
+    parser.add_argument("--compute", action="store_true", help="Perform SPOD and save results")
+    parser.add_argument("--plot", action="store_true", help="Generate default plots")
     args = parser.parse_args()
 
     if args.config:
@@ -633,9 +636,29 @@ if __name__ == "__main__":
     # Further configuration
     n_modes_to_save = 50  # Number of SPOD modes to save
 
-    # Create and run analyzer
     analyzer = SPODAnalyzer(file_path=data_file, nfft=nfft_param, overlap=overlap_param, data_loader=data_loader_param, spatial_weight_type=spatial_weight_type_param)
-    analyzer.run_analysis()
+
+    run_all = not (args.prep or args.compute or args.plot)
+
+    if run_all or args.prep:
+        analyzer.load_and_preprocess()
+        analyzer.compute_fft_blocks()
+
+    if run_all or args.compute:
+        if analyzer.qhat.size == 0:
+            analyzer.load_and_preprocess()
+            analyzer.compute_fft_blocks()
+        analyzer.perform_spod()
+        analyzer.save_results()
+
+    if run_all or args.plot:
+        if analyzer.eigenvalues.size == 0 or analyzer.St.size == 0:
+            print("No SPOD results to plot. Run with --compute first.")
+        else:
+            analyzer.plot_eigenvalues_v2()
+
+    if run_all:
+        print_summary("SPOD", analyzer.results_dir, analyzer.figures_dir)
 
     # Example of calling plot_eigenvalues_v2 directly if needed for specific params
     # analyzer.plot_eigenvalues_v2(n_modes_line_plot=15, shading_cmap='viridis_r')

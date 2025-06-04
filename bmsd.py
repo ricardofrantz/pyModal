@@ -24,6 +24,7 @@ Method:
 import os
 import re
 import time
+import argparse
 
 import h5py
 import matplotlib.pyplot as plt
@@ -479,12 +480,14 @@ class BSMDAnalyzer(BaseAnalyzer):
 
 
 if __name__ == "__main__":
-    # --- Configuration ---
-    # data_file = "./data/jetLES_small.mat" # Updated data path
-    data_file = "./data/jetLES.mat"  # Path to your data file
-    # data_file = "./data/cavityPIV.mat" # Path to your data file
+    parser = argparse.ArgumentParser(description="Run BSMD analysis")
+    parser.add_argument("--prep", action="store_true", help="Load data and compute FFT blocks")
+    parser.add_argument("--compute", action="store_true", help="Perform BSMD and save results")
+    parser.add_argument("--plot", action="store_true", help="Generate example plots")
+    args = parser.parse_args()
 
-    # Choose loader based on file
+    data_file = "./data/jetLES.mat"
+
     if "jet" in data_file.lower():
         loader = load_jetles_data
         spatial_weight = "polar"
@@ -496,229 +499,43 @@ if __name__ == "__main__":
         file_path=data_file,
         nfft=128,
         overlap=0.5,
-        results_dir=RESULTS_DIR_BSMD,  # HDF files go here
-        figures_dir=FIGURES_DIR_BSMD,  # PNG files go here
+        results_dir=RESULTS_DIR_BSMD,
+        figures_dir=FIGURES_DIR_BSMD,
         data_loader=loader,
         spatial_weight_type=spatial_weight,
         use_static_triads=True,
         static_triads=ALL_TRIADS,
     )
-    analyzer.run_analysis()
 
-    # **Plot 1: BSMD Eigenvalue Magnitudes**
-    lambdas = np.abs(analyzer.eigenvalues)
-    plt.figure()
-    plt.plot(lambdas, "o-")
-    plt.xlabel("Triad index")
-    plt.ylabel("Eigenvalue magnitude")
-    plt.title("BSMD eigenvalue magnitudes")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
-    plt.close()
+    run_all = not (args.prep or args.compute or args.plot)
 
-    # **Additional Figures per Schmidt (2020)**
+    if run_all or args.prep:
+        analyzer.load_and_preprocess()
+        analyzer.compute_fft_blocks()
 
-    # **Plot 2: Complex Eigenvalue Plane**
-    vals = analyzer.eigenvalues
-    plt.figure()
-    plt.scatter(np.real(vals), np.imag(vals), marker="o")
-    plt.xlabel("Real(λ)")
-    plt.ylabel("Imag(λ)")
-    plt.title("BSMD eigenvalues (complex plane)")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eig_complex_plane.png"))
-    plt.close()
+    if run_all or args.compute:
+        if analyzer.qhat.size == 0:
+            analyzer.load_and_preprocess()
+            analyzer.compute_fft_blocks()
+        analyzer.perform_bsmd()
+        analyzer.save_results()
 
-    # **Function to Translate Triad Indices to Strouhal Numbers**
-    def triad_to_strouhal(triad, fs, nfft):
-        """
-        Convert triad indices (p_k, p_l, p_k+p_l) to Strouhal numbers (St_k, St_l, St_(k+l))
-        and their decomposition in terms of St_0.
-
-        Args:
-            triad (tuple): Triad indices (p_k, p_l, p_k+p_l).
-            fs (float): Sampling frequency.
-            nfft (int): Number of FFT points.
-
-        Returns:
-            dict: Contains 'decomposition' (str) and 'values' (tuple of St_k, St_l, St_(k+l)).
-        """
-        p_k, p_l, p_k_plus_l = triad
-        St_0 = fs / nfft  # Base Strouhal number (frequency resolution)
-        St_k = p_k * St_0
-        St_l = p_l * St_0
-        St_k_plus_l = p_k_plus_l * St_0
-        decomposition = f"({p_k}*St_0, {p_l}*St_0, {p_k_plus_l}*St_0)"
-        values = (St_k, St_l, St_k_plus_l)
-        return {"decomposition": decomposition, "values": values}
-
-    # **Plot 3: Spatial Bispectral Modes for Top 5 Dominant Triads**
-    # Find the indices of the top 5 dominant triads based on |λ|
-    lambda_mags = np.abs(analyzer.eigenvalues)
-    top_5_indices = np.argsort(lambda_mags)[-5:][::-1]  # Top 5 in descending order
-    top_5_triads = [analyzer.triads[idx] for idx in top_5_indices]
-
-    Nx, Ny = analyzer.data["Nx"], analyzer.data["Ny"]
-    x = analyzer.data["x"]
-    y = analyzer.data["y"]
-    X, Y = np.meshgrid(x, y, indexing="ij")
-
-    # Create a 5x2 subplot grid (5 rows for each triad, 2 columns for Phi1 and Phi2)
-    fig, axs = plt.subplots(5, 2, figsize=(12, 20), sharex=True, sharey=True)
-    for i, (idx, triad) in enumerate(zip(top_5_indices, top_5_triads)):
-        phi1 = analyzer.Phi1[idx].reshape(Nx, Ny)
-        phi2 = analyzer.Phi2[idx].reshape(Nx, Ny)
-        # Convert triad to Strouhal numbers and decomposition
-        result = triad_to_strouhal(triad, analyzer.fs, analyzer.nfft)
-        decomposition = result["decomposition"]
-        St_k, St_l, St_k_plus_l = result["values"]
-        # Plot Phi1 (left column)
-        pcm1 = axs[i, 0].pcolormesh(Y, X, np.real(phi1), shading="auto")
-        fig.colorbar(pcm1, ax=axs[i, 0])
-        axs[i, 0].set_title(f"Phi1 real part\n{decomposition}\n(St_1={St_k:.3f}, St_2={St_l:.3f}, St_3={St_k_plus_l:.3f})")
-        axs[i, 0].set_ylabel("x")
-        # Plot Phi2 (right column)
-        pcm2 = axs[i, 1].pcolormesh(Y, X, np.real(phi2), shading="auto")
-        fig.colorbar(pcm2, ax=axs[i, 1])
-        axs[i, 1].set_title(f"Phi2 real part\n{decomposition}\n(St_1={St_k:.3f}, St_2={St_l:.3f}, St_3={St_k_plus_l:.3f})")
-        # Set labels for the bottom row
-        if i == 4:
-            axs[i, 0].set_xlabel("y")
-            axs[i, 1].set_xlabel("y")
-    plt.tight_layout()
-    fig.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_modes_top_5_triads.png"))
-    plt.close(fig)
-
-    # **Plot 4: BSMD Eigenvalue Magnitudes in (St_1, St_2) Plane with Full and Zoomed-In Views**
-    # Extract frequencies and eigenvalue magnitudes
-    triads_arr = np.array(analyzer.triads)
-    fs = analyzer.fs
-    nfft = analyzer.nfft
-    St1_vals = triads_arr[:, 0] * fs / nfft
-    St2_vals = triads_arr[:, 1] * fs / nfft
-    lambda_mags = np.abs(analyzer.eigenvalues)
-
-    # Compute logarithmic magnitudes
-    log_lambda_mags = np.log10(lambda_mags + 1e-20)  # Add small value to avoid log(0)
-
-    # Dynamically determine frequency ranges for the full plot
-    St1_max = np.max(St1_vals)
-    St2_min = np.min(St2_vals)
-    St2_max = np.max(St2_vals)
-
-    # Estimate fundamental frequency St0 from triad with p2=0 and maximum |λ|
-    idx_p2_zero = np.where(triads_arr[:, 1] == 0)[0]
-    if len(idx_p2_zero) > 0:
-        idx_max = idx_p2_zero[np.argmax(lambda_mags[idx_p2_zero])]
-        St0 = St1_vals[idx_max]
-    else:
-        St0 = fs / nfft  # Default to frequency resolution if no p2=0 triad exists
-
-    # Set minimum zoom range to prevent identical axis limits
-    min_zoom = fs / nfft
-    k = 4  # Multiplier for zoom range, adjustable if needed
-    zoom_St1_max = max(k * St0, min_zoom)
-    zoom_St2_min = -zoom_St1_max
-    zoom_St2_max = zoom_St1_max
-
-    # Create grids for full and zoomed plots
-    n_St1 = 100  # Number of grid points for St_1
-    n_St2 = 160  # Number of grid points for St_2
-    St1_grid = np.linspace(0, St1_max, n_St1)
-    St2_grid = np.linspace(St2_min, St2_max, n_St2)
-    ST1, ST2 = np.meshgrid(St1_grid, St2_grid)
-
-    St1_zoom_grid = np.linspace(0, zoom_St1_max, n_St1)
-    St2_zoom_grid = np.linspace(zoom_St2_min, zoom_St2_max, n_St2)
-    ST1_zoom, ST2_zoom = np.meshgrid(St1_zoom_grid, St2_zoom_grid)
-
-    # Initialize grid arrays with NaN for regions outside the triangular region
-    log_lambda_grid = np.full(ST1.shape, np.nan)
-    log_lambda_zoom = np.full(ST1_zoom.shape, np.nan)
-
-    # Map log_lambda_mags to the grids
-    for St1, St2, log_mag in zip(St1_vals, St2_vals, log_lambda_mags):
-        if St1 >= 0 and St1 + St2 >= 0:  # Triangular region condition
-            i_St1 = np.argmin(np.abs(St1_grid - St1))
-            i_St2 = np.argmin(np.abs(St2_grid - St2))
-            log_lambda_grid[i_St2, i_St1] = log_mag
-            # Map to zoom grid if within zoom range
-            if 0 <= St1 <= zoom_St1_max and zoom_St2_min <= St2 <= zoom_St2_max:
-                i_St1_zoom = np.argmin(np.abs(St1_zoom_grid - St1))
-                i_St2_zoom = np.argmin(np.abs(St2_zoom_grid - St2))
-                log_lambda_zoom[i_St2_zoom, i_St1_zoom] = log_mag
-
-    # Set color scale dynamically
-    finite_logs = log_lambda_mags[np.isfinite(log_lambda_mags)]
-    if len(finite_logs) > 0:
-        vmin = np.percentile(finite_logs, 1)  # 1st percentile for lower bound
-        vmax = max(0, np.percentile(finite_logs, 99))  # 99th percentile, ensure ≥ 0
-    else:
-        vmin, vmax = -20, 0  # Default values if no finite logs
-
-    # Ensure vmin < vmax for contour levels
-    if vmin >= vmax:
-        if vmin == 0:
-            vmin = -1  # Arbitrary small value to allow contour levels
+    if run_all or args.plot:
+        if analyzer.eigenvalues.size == 0:
+            print("No BSMD results to plot. Run with --compute first.")
         else:
-            vmin = vmax - 1  # Ensure a small range if they're equal
+            lambdas = np.abs(analyzer.eigenvalues)
+            plt.figure()
+            plt.plot(lambdas, "o-")
+            plt.xlabel("Triad index")
+            plt.ylabel("Eigenvalue magnitude")
+            plt.title("BSMD eigenvalue magnitudes")
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
+            plt.close()
 
-    # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    if run_all:
+        print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
 
-    # Plot (a): Full Bispectrum with Colorful Contour Lines
-    pcm1 = ax1.pcolormesh(ST1, ST2, log_lambda_grid, cmap="jet", vmin=vmin, vmax=vmax, shading="auto")
-    # Add colorful contour lines to the full bispectrum plot
-    levels = np.linspace(vmin, vmax, 10)
-    levels = np.sort(levels)  # Ensure levels are increasing
-    # Define a list of colors for the contours (cycling through if needed)
-    contour_colors = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "gray", "cyan"]
-    ax1.contour(ST1, ST2, log_lambda_grid, levels=levels, colors=contour_colors, linewidths=0.5)
-    fig.colorbar(pcm1, ax=ax1, label=r"$\log(|\lambda|)$")
-    ax1.set_xlabel(r"$St_1$")
-    ax1.set_ylabel(r"$St_2$")
-    ax1.set_title("(a) Full Bispectrum")
-    ax1.set_xlim(0, St1_max)
-    ax1.set_ylim(St2_min, St2_max)
 
-    # Plot (b): Zoomed-In Low-Frequency Region
-    pcm2 = ax2.pcolormesh(ST1_zoom, ST2_zoom, log_lambda_zoom, cmap="jet", vmin=vmin, vmax=vmax, shading="auto")
-    fig.colorbar(pcm2, ax=ax2, label=r"$\log(|\lambda|)$")
-    ax2.set_xlabel(r"$St_1$")
-    ax2.set_ylabel(r"$St_2$")
-    ax2.set_title("(b) Low-Frequency Zoom")
-
-    # Automatically select and mark the top M triads in the zoomed-in plot
-    M = 6  # Number of triads to mark, adjustable if needed
-    mask_zoom = (St1_vals >= 0) & (St1_vals <= zoom_St1_max) & (St2_vals >= zoom_St2_min) & (St2_vals <= zoom_St2_max)
-    triads_zoom = triads_arr[mask_zoom]
-    lambda_mags_zoom = lambda_mags[mask_zoom]
-    St1_zoom_vals = St1_vals[mask_zoom]
-    St2_zoom_vals = St2_vals[mask_zoom]
-
-    if len(lambda_mags_zoom) > 0:
-        top_idx = np.argsort(lambda_mags_zoom)[-M:][::-1]  # Indices of top M magnitudes
-        top_triads = triads_zoom[top_idx]
-        top_St1 = St1_zoom_vals[top_idx]
-        top_St2 = St2_zoom_vals[top_idx]
-
-        for (p1, p2, _), St1, St2 in zip(top_triads, top_St1, top_St2):
-            ax2.plot(St1, St2, "ro", markersize=8, markerfacecolor="none")
-            ax2.text(St1, St2, f"({p1},{p2})", fontsize=8, ha="left", va="bottom")
-
-    # Plot the fundamental line St_1 + St_2 = St_0 in the zoomed-in plot
-    St1_line = np.linspace(0, zoom_St1_max, 100)
-    St2_line = St0 - St1_line
-    ax2.plot(St1_line, St2_line, "k--", label=r"$St_1 + St_2 = St_0$")
-    ax2.legend()
-
-    # Set zoom plot limits
-
-# Finalize and save the plot
-plt.tight_layout()
-output_file = os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eig_St1St2_plane.png")
-plt.savefig(output_file)
-plt.close()
-print(f"Plot saved to {output_file}")

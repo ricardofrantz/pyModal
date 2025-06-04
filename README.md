@@ -50,3 +50,18 @@ pytest
 
 Set the environment variable `OMP_NUM_THREADS` to control how many worker threads
 are used for FFT and SPOD computations. The default is `1`.
+
+### Script Usage
+
+The analysis scripts (`pod.py`, `spod.py`, and `bmsd.py`) can now be executed in
+separate stages. Each accepts the flags `--prep`, `--compute`, and `--plot` to
+run only the desired part of the workflow:
+
+```bash
+python pod.py --prep      # preprocess input data
+python pod.py --compute   # perform the decomposition
+python pod.py --plot      # generate figures from results
+```
+
+Running a script with no flags executes all steps in sequence. The same options
+apply to `spod.py` and `bmsd.py`.

@@ -799,6 +799,9 @@ class PODAnalyzer(BaseAnalyzer):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run POD analysis")
     parser.add_argument("--config", help="Path to JSON/YAML configuration file", default=None)
+    parser.add_argument("--prep", action="store_true", help="Load data and prepare for POD")
+    parser.add_argument("--compute", action="store_true", help="Perform POD and save results")
+    parser.add_argument("--plot", action="store_true", help="Generate default plots")
     args = parser.parse_args()
 
     if args.config:
@@ -855,8 +858,31 @@ if __name__ == "__main__":
             spatial_weights_main = auto_detect_weight_type(data_file)
             print(f"Unknown case: Using load_mat_data and '{spatial_weights_main}' weights.")
 
-    # Create POD analyzer instance
     pod_analyzer = PODAnalyzer(file_path=data_file, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=data_loader_main, spatial_weight_type=spatial_weights_main, n_modes_save=n_modes_to_save_main)
 
-    # Run the full analysis and plotting pipeline
-    pod_analyzer.run_analysis(plot_n_modes_spatial=n_modes_to_plot_spatial_main, plot_n_coeffs_time=n_coeffs_to_plot_time_main)
+    run_all = not (args.prep or args.compute or args.plot)
+
+    if run_all or args.prep:
+        pod_analyzer.load_and_preprocess()
+
+    if run_all or args.compute:
+        if pod_analyzer.data == {}:
+            pod_analyzer.load_and_preprocess()
+        pod_analyzer.perform_pod()
+        pod_analyzer.save_results()
+
+    if run_all or args.plot:
+        if pod_analyzer.eigenvalues.size == 0:
+            print("No POD results to plot. Run with --compute first.")
+        else:
+            pod_analyzer.plot_eigenvalues()
+            pod_analyzer.plot_modes(n_modes_to_plot=n_modes_to_plot_spatial_main)
+            pod_analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
+            pod_analyzer.plot_cumulative_energy()
+            pod_analyzer.plot_reconstruction_error()
+            pod_analyzer.plot_reconstruction_comparison()
+            pod_analyzer.check_spatial_mode_orthogonality()
+            pod_analyzer.check_temporal_coefficient_orthogonality()
+
+    if run_all:
+        print_summary("POD", pod_analyzer.results_dir, pod_analyzer.figures_dir)
