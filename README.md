@@ -34,8 +34,8 @@ A **pure-Python** collection of simple scripts (no MPI, minimal dependencies) fo
 ## 💾 Getting the Code
 
 ```bash
-git clone https://github.com/ricardofrantz/tri-modal-decomp.git
-cd tri-modal-decomp
+git clone https://github.com/ricardofrantz/modal-decomp.git
+cd modal-decomp
 ```
 
 ## Running Tests
