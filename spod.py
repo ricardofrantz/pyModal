@@ -554,7 +554,7 @@ class SPODAnalyzer(BaseAnalyzer):
             if isinstance(im, list):
                 im = None  # For 1D plots contourf not used
             if im is not None:
-                fig.colorbar(im, ax=axes[:n_modes], shrink=0.8, label="Re($\Phi$)")
+                fig.colorbar(im, ax=axes[:n_modes], shrink=0.8, label=r"Re($\Phi$)")
             fig.suptitle(f"SPOD Modes at St={st_val:.4f}")
 
             plot_filename = os.path.join(
