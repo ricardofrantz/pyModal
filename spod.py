@@ -460,13 +460,14 @@ class SPODAnalyzer(BaseAnalyzer):
         num_y_points_mesh = 100
         y_coords_mesh = np.logspace(np.log10(y_fill_min), np.log10(y_fill_max), num_y_points_mesh)
 
-        C_fill_data = np.full((num_y_points_mesh, len(St_plot)), np.nan)
-        # DIAGNOSTIC PRINT for debugging IndexError
-        print(f"DEBUG: In plot_eigenvalues_v2: St_plot.shape={St_plot.shape}, L_plot.shape={L_plot.shape}")
-        for st_idx in range(len(St_plot)):
-            for y_idx in range(num_y_points_mesh):
-                if y_coords_mesh[y_idx] <= L_plot[st_idx, 0]:  # Shade up to the first mode
-                    C_fill_data[y_idx, st_idx] = y_coords_mesh[y_idx]
+        # Fill the background shading without explicit Python loops
+        first_mode = L_plot[:, 0]
+        mask = y_coords_mesh[:, None] <= first_mode[None, :]
+        C_fill_data = np.where(
+            mask,
+            np.broadcast_to(y_coords_mesh[:, None], (num_y_points_mesh, len(St_plot))),
+            np.nan,
+        )
 
         norm_vmin = np.min(y_coords_mesh[y_coords_mesh > 0])
         norm_vmax = np.max(y_coords_mesh)
