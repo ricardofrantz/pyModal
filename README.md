@@ -29,6 +29,8 @@ A **pure-Python** collection of simple scripts (no MPI, minimal dependencies) fo
   Runs out of the box on a single machine.
 - **Flexible I/O**
   Read/write HDF5, NetCDF, MATLAB `.mat`, or raw NumPy arrays.
+- **Modular Data Interface**
+  Plug in new data formats via `data_interface.py` with no changes to the analyzers.
 - **Built-in Visualization**
   Quick plotting of mode shapes, power spectra, and bispectral maps.
 

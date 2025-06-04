@@ -5,6 +5,12 @@ Common utilities for modal decomposition methods.
 All imports are centralized here to keep the code clean and consistent.
 """
 from configs import *
+from data_interface import (
+    load_data as di_load_data,
+    load_mat_data as di_load_mat_data,
+    load_jetles_data as di_load_jetles_data,
+    auto_detect_weight_type as di_auto_detect_weight_type
+)
 from fft.fft_backends import get_fft_func
 
 def get_num_threads():
@@ -56,102 +62,11 @@ def print_summary(analysis: str, results_dir: str, figures_dir: str) -> None:
 
 
 def load_jetles_data(file_path):
-    """Load and preprocess data from HDF5 file with JetLES format."""
-    print(f"Loading data from {file_path}")
-    with h5py.File(file_path, "r") as fread:
-        # Get dimensions and data
-        q = fread["p"][:]  # pressure field (or other variable)
-        x = fread["x"][:, 0]  # x-coordinates (axial)
-        y = fread["r"][0, :]  # y-coordinates (radial)
-        dt = fread["dt"][0][0]  # time step
-
-    # Transpose q: original shape (Nx, Ny, Ns) -> (Ns, Nx, Ny)
-    # Reshape q: flatten spatial dimensions -> (Ns, Nx * Ny) for SPOD
-    q = np.transpose(q, (2, 0, 1))
-    Nx, Ny = x.shape[0], y.shape[0]
-    Ns = q.shape[0]  # number of snapshots (time steps)
-    q_reshaped = q.reshape(Ns, Nx * Ny)  # Use reshape for safety
-
-    # Return all the data in a dictionary for easy access
-    return {
-        "q": q_reshaped,  # Data reshaped for SPOD: [time, space]
-        "x": x,  # Axial coordinates
-        "y": y,  # Radial coordinates
-        "dt": dt,  # Time step
-        "Nx": Nx,  # Number of points in x
-        "Ny": Ny,  # Number of points in y (radial)
-        "Ns": Ns,  # Number of snapshots
-    }
-
-
+    return di_load_jetles_data(file_path)
 def load_mat_data(file_path):
-    """Flexible loader for .mat files with different variable names and shapes."""
-    with h5py.File(file_path, "r") as fread:
-        # Try common variable names for the main field
-        for var in ["p", "u", "v", "data"]:
-            if var in fread:
-                q = fread[var][:]
-                break
-        else:
-            raise KeyError("No recognized data variable ('p', 'u', 'v', 'data') in file.")
-        x = fread["x"][:]
-        y = fread["y"][:]
-        dt = np.array(fread["dt"])[0][0] if "dt" in fread else 1.0
-    print(f"Loaded variable shape: q={q.shape}, x={x.shape}, y={y.shape}")
-
-    # If x and y are 2D (meshgrid), reduce to 1D vectors
-    if x.ndim == 2:
-        x_vec = x[:, 0]
-    else:
-        x_vec = x
-    if y.ndim == 2:
-        y_vec = y[0, :]
-    else:
-        y_vec = y
-    Nx, Ny = x_vec.shape[0], y_vec.shape[0]
-
-    # Special handling for (Nx, Ny, Ns)
-    if q.shape == (Nx, Ny, q.shape[2]):
-        Ns = q.shape[2]
-        q = np.transpose(q, (2, 0, 1))  # (Ns, Nx, Ny)
-        q_reshaped = q.reshape(Ns, Nx * Ny)
-        print(f"Data interpreted as (Nx, Ny, Ns) and transposed to (Ns, Nx, Ny) = {q.shape}")
-    # Standard (Ns, Nx, Ny)
-    elif q.shape == (q.shape[0], Nx, Ny):
-        Ns = q.shape[0]
-        q_reshaped = q.reshape(Ns, Nx * Ny)
-        print(f"Data interpreted as (Ns, Nx, Ny) = {q.shape}")
-    # Try all permutations if above does not match
-    else:
-        for axes in [(0, 1, 2), (2, 0, 1), (2, 1, 0), (0, 2, 1), (1, 0, 2), (1, 2, 0)]:
-            try:
-                arr = np.transpose(q, axes)
-                Ns, Nxx, Nyy = arr.shape
-                if Nxx == Nx and Nyy == Ny:
-                    q_reshaped = arr.reshape(Ns, Nx * Ny)
-                    print(f"Data interpreted as (Ns, Nx, Ny) = {arr.shape} via permutation {axes}")
-                    break
-            except Exception:
-                continue
-        else:
-            # Try if already 2D (Ns, Nspace)
-            if q.ndim == 2 and q.shape[1] == Nx * Ny:
-                q_reshaped = q
-                Ns = q.shape[0]
-                print(f"Data interpreted as (Ns, Nspace) = {q.shape}")
-            else:
-                raise ValueError(f"Cannot interpret data shape: q={q.shape}, x={x.shape}, y={y.shape}. Please check the file.")
-    return {"q": q_reshaped, "x": x_vec, "y": y_vec, "dt": dt, "Nx": Nx, "Ny": Ny, "Ns": q_reshaped.shape[0]}
-
-
+    return di_load_mat_data(file_path)
 def load_data(file_path):
-    """Smart data loader that selects appropriate loader based on file name."""
-    if "jet" in file_path.lower():
-        return load_jetles_data(file_path)
-    else:
-        return load_mat_data(file_path)
-
-
+    return di_load_data(file_path)
 def generate_dummy_data_like_jetles(
     output_path: str,
     Ns: int = 100,
@@ -377,11 +292,7 @@ def blocksfft(
 
 
 def auto_detect_weight_type(file_path):
-    """Auto-detect weight type based on file name."""
-    if "cavity" in file_path.lower():
-        return "uniform"
-    else:
-        return "polar"
+    return di_auto_detect_weight_type(file_path)
 
 
 def spod_function(qhat, nblocks, dst, w, return_psi=False):
