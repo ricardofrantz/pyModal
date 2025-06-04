@@ -346,30 +346,32 @@ def blocksfft(
     q_mean = np.mean(q, axis=0)
     window_broadcast = window[:, np.newaxis]
 
-    if n_threads is None:
-        n_threads = get_num_threads()
-
-    def process_block(iblk):
+    # ``n_threads`` is accepted for backward compatibility but FFT blocks are
+    # processed sequentially to avoid oversubscribing underlying math libraries.
+    for iblk in range(nblocks):
         ts = min(iblk * (nfft - novlap), q.shape[0] - nfft)
         tf = np.arange(ts, ts + nfft)
         block = q[tf, :]
+
+        # Subtract mean
         if blockwise_mean:
             block_mean = np.mean(block, axis=0)
         else:
             block_mean = q_mean
         block_centered = block - block_mean
+
+        # Normalize variance if requested
         if normvar:
             block_var = np.var(block_centered, axis=0, ddof=1)
             block_var[block_var < 4 * np.finfo(float).eps] = 1.0
             block_centered = block_centered / block_var
+
+        # Apply window and FFT
         fft_func = get_fft_func()
         full_fft_result = fft_func(block_centered * window_broadcast, axis=0)
-        result = (cw / nfft) * full_fft_result[:n_freq_out, :]
-        return iblk, result
 
-    results = parallel_map(process_block, range(nblocks), threads=n_threads)
-    for iblk, block_fft in results:
-        q_hat[:, :, iblk] = block_fft
+        # Store one-sided spectrum
+        q_hat[:, :, iblk] = (cw / nfft) * full_fft_result[:n_freq_out, :]
 
     return q_hat
 
