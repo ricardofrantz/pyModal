@@ -473,6 +473,13 @@ class SPODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = x_coords.max() - x_coords.min()
+            dy = y_coords.max() - y_coords.min()
+            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+        else:
+            aspect_ratio = "auto"
+
         for f_idx in freq_indices:
             st_val = self.St[f_idx]
             n_modes = len(modes_to_plot)
@@ -489,7 +496,7 @@ class SPODAnalyzer(BaseAnalyzer):
                 if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
                     mode_2d = mode_real.reshape(Nx, Ny).T
                     im = axes[i].contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
-                    axes[i].set_aspect("auto")
+                    axes[i].set_aspect(aspect_ratio)
                 else:
                     im = axes[i].plot(mode_real)
                 axes[i].set_title(f"Mode {m_idx + 1}")
