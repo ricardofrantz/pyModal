@@ -15,6 +15,7 @@ Reference codes:
 # Standard library imports
 import os
 import time
+import argparse
 
 import h5py
 import matplotlib.pyplot as plt
@@ -773,10 +774,18 @@ class PODAnalyzer(BaseAnalyzer):
 
 # Example usage when the script is run directly
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run POD analysis")
+    parser.add_argument("--config", help="Path to JSON/YAML configuration file", default=None)
+    args = parser.parse_args()
+
+    if args.config:
+        from configs import load_config
+        load_config(args.config)
+
     # --- Configuration ---
-    # data_file = "./data/jetLES_small.mat" # Updated data path
+    # data_file = "./data/jetLES_small.mat"  # Updated data path
     data_file = "./data/jetLES.mat"  # Path to your data file
-    # data_file = "./data/cavityPIV.mat" # Path to your data file
+    # data_file = "./data/cavityPIV.mat"  # Path to your data file
 
     n_modes_to_save_main = 10  # Number of POD modes to save
     n_modes_to_plot_spatial_main = 4  # Number of spatial modes to visualize
