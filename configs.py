@@ -86,9 +86,7 @@ def load_config(config_path):
             try:
                 import yaml
             except Exception as exc:  # pragma: no cover - import error path
-                raise ImportError(
-                    "PyYAML must be installed to read YAML configuration files"
-                ) from exc
+                raise ImportError("PyYAML must be installed to read YAML configuration files") from exc
             config = yaml.safe_load(f)
         else:
             config = json.load(f)
@@ -101,4 +99,3 @@ def load_config(config_path):
         key_upper = key.upper()
         if key_upper in globals():
             globals()[key_upper] = value
-

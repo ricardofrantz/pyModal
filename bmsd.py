@@ -21,10 +21,10 @@ Method:
 """
 
 # Standard library imports
+import argparse
 import os
 import re
 import time
-import argparse
 
 import h5py
 import matplotlib.pyplot as plt
@@ -537,5 +537,3 @@ if __name__ == "__main__":
 
     if run_all:
         print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
-
-

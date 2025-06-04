@@ -24,4 +24,3 @@ def parallel_map(func, iterable, workers=None):
         for f in futures:
             results.append(f.result())
     return results
-

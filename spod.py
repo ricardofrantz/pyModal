@@ -1,9 +1,9 @@
 # Standard library imports
+import argparse
 import glob
 import json
 import os
 import time
-import argparse
 
 import h5py
 import matplotlib.colors as colors
@@ -22,6 +22,7 @@ from configs import (
     WINDOW_NORM,
     WINDOW_TYPE,
 )
+from parallel_utils import parallel_map
 
 # Local application/library specific imports
 from utils import (
@@ -30,10 +31,9 @@ from utils import (
     load_jetles_data,  # For example in __main__
     load_mat_data,  # For example in __main__
     make_result_filename,
-    spod_function,  # Core SPOD routine for SPODAnalyzer
     print_summary,
+    spod_function,  # Core SPOD routine for SPODAnalyzer
 )
-from parallel_utils import parallel_map
 
 
 class SPODAnalyzer(BaseAnalyzer):
@@ -544,7 +544,7 @@ class SPODAnalyzer(BaseAnalyzer):
                     im = axes[i].plot(mode_real)
                 axes[i].set_title(f"Mode {m_idx + 1}")
             for j in range(n_modes, len(axes)):
-                axes[j].axis('off')
+                axes[j].axis("off")
 
             if isinstance(im, list):
                 im = None  # For 1D plots contourf not used
@@ -571,6 +571,7 @@ if __name__ == "__main__":
 
     if args.config:
         from configs import load_config
+
         load_config(args.config)
 
     # --- Configuration ---

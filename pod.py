@@ -13,9 +13,9 @@ Reference codes:
 """
 
 # Standard library imports
+import argparse
 import os
 import time
-import argparse
 
 import h5py
 import matplotlib.pyplot as plt
@@ -789,9 +789,7 @@ class PODAnalyzer(BaseAnalyzer):
             self.check_temporal_coefficient_orthogonality()
 
         end_total_time = time.time()
-        print(
-            f"\nPOD analysis and plotting completed successfully in {end_total_time - start_total_time:.2f} seconds."
-        )
+        print(f"\nPOD analysis and plotting completed successfully in {end_total_time - start_total_time:.2f} seconds.")
         print_summary("POD", self.results_dir, self.figures_dir)
 
 
@@ -806,6 +804,7 @@ if __name__ == "__main__":
 
     if args.config:
         from configs import load_config
+
         load_config(args.config)
 
     # --- Configuration ---

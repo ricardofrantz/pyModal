@@ -5,10 +5,11 @@ Common utilities for modal decomposition methods.
 All imports are centralized here to keep the code clean and consistent.
 """
 
+from scipy.signal import get_window
+
 from configs import *
 from fft.fft_backends import get_fft_func
-from scipy.signal import get_window
-from parallel_utils import parallel_map, get_num_workers
+from parallel_utils import get_num_workers, parallel_map
 
 
 def make_result_filename(root, nfft, overlap, Ns, analysis):
@@ -188,10 +189,7 @@ def generate_dummy_data_like_jetles(
     mode2 = np.cos(0.5 * np.pi * x) * np.sin(2.0 * np.pi * r)
 
     # Construct coherent pressure field (shape: Nx, Ny, Ns)
-    signal = (
-        np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :]
-        + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
-    )
+    signal = np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :] + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
 
     noise = noise_level * np.random.randn(Ns, Nx, Ny)
     p = np.transpose(signal + noise, (1, 2, 0))  # (Nx, Ny, Ns)
