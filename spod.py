@@ -529,7 +529,7 @@ class SPODAnalyzer(BaseAnalyzer):
         if x_coords.ndim == 1 and y_coords.ndim == 1:
             dx = x_coords.max() - x_coords.min()
             dy = y_coords.max() - y_coords.min()
-            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+            aspect_ratio = dy / dx if dx > 0 and dy > 0 else "auto"
         else:
             aspect_ratio = "auto"
 
@@ -605,7 +605,7 @@ if __name__ == "__main__":
     threads_available = get_num_threads()
     print(f"Available CPU threads detected: {threads_available}")
     if os.environ.get("OMP_NUM_THREADS") is None:
-        print("Set OMP_NUM_THREADS to this value for maximum performance.")
+        print(f"export OMP_NUM_THREADS={threads_available} for maximum performance.")
 
     if args.config:
         from configs import load_config
