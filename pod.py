@@ -24,7 +24,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg  # For eigh
 
-from configs import CMAP_DIV, CMAP_SEQ, FIGURES_DIR, RESULTS_DIR
+from configs import (
+    CMAP_DIV,
+    CMAP_SEQ,
+    FIGURES_DIR_POD,
+    RESULTS_DIR_POD,
+)
 
 # Local application/library specific imports
 from utils import (
@@ -69,16 +74,16 @@ class PODAnalyzer(BaseAnalyzer):
                       but are initialized with dummy values.
     """
 
-    def __init__(self, file_path, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, data_loader=None, spatial_weight_type="auto", n_modes_save=10):
+    def __init__(self, file_path, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=None, spatial_weight_type="auto", n_modes_save=10):
         """
         Initialize the PODAnalyzer.
 
         Args:
             file_path (str): Path to the data file (e.g., .mat, .h5).
             results_dir (str, optional): Directory to save analysis results (HDF5 files).
-                                         Defaults to `RESULTS_DIR` from `configs.py`.
+                                         Defaults to `RESULTS_DIR_POD` from `configs.py`.
             figures_dir (str, optional): Directory to save generated plots.
-                                         Defaults to `FIGURES_DIR` from `configs.py`.
+                                         Defaults to `FIGURES_DIR_POD` from `configs.py`.
             data_loader (callable, optional): Custom function to load data from `file_path`.
                                               If None, `BaseAnalyzer` attempts to auto-detect.
                                               Defaults to None.
@@ -833,13 +838,13 @@ if __name__ == "__main__":
             print(f"Unknown case: Using load_mat_data and '{spatial_weights_main}' weights.")
 
     # Create POD analyzer instance
-    pod_analyzer = PODAnalyzer(file_path=data_file, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, data_loader=data_loader_main, spatial_weight_type=spatial_weights_main, n_modes_save=n_modes_to_save_main)
+    pod_analyzer = PODAnalyzer(file_path=data_file, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=data_loader_main, spatial_weight_type=spatial_weights_main, n_modes_save=n_modes_to_save_main)
 
     # Run the full analysis and plotting pipeline
     pod_analyzer.run_analysis(plot_n_modes_spatial=n_modes_to_plot_spatial_main, plot_n_coeffs_time=n_coeffs_to_plot_time_main)
 
     print("\n--------------------------------------------")
     print("POD analysis script finished.")
-    print(f"Results saved in: {os.path.abspath(RESULTS_DIR)}")
-    print(f"Figures saved in: {os.path.abspath(FIGURES_DIR)}")
+    print(f"Results saved in: {os.path.abspath(RESULTS_DIR_POD)}")
+    print(f"Figures saved in: {os.path.abspath(FIGURES_DIR_POD)}")
     print("--------------------------------------------")
