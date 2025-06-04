@@ -45,6 +45,7 @@ from utils import (
     load_jetles_data,  # If used in __main__
     load_mat_data,  # If used in __main__
     make_result_filename,  # For saving results
+    print_summary,
 )
 
 
@@ -467,13 +468,14 @@ class BSMDAnalyzer(BaseAnalyzer):
 
         This is the primary method to call to run a complete BSMD study on a dataset.
         """
-        print(f"\n--- Starting BSMD Analysis for: {os.path.basename(self.file_path)} ---")
+        print(f"🔎 Starting BSMD analysis for {os.path.basename(self.file_path)}")
         start_total_time = time.time()
         self.load_and_preprocess()
         self.compute_fft_blocks()
         self.perform_bsmd()  # Calls the renamed method
         self.save_results()
         print(f"Total BSMD runtime: {time.time() - start_total_time:.2f} s")
+        print_summary("BSMD", self.results_dir, self.figures_dir)
 
 
 if __name__ == "__main__":
@@ -720,9 +722,3 @@ output_file = os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eig_St1
 plt.savefig(output_file)
 plt.close()
 print(f"Plot saved to {output_file}")
-
-print("\n--------------------------------------------")
-print("BSMD analysis script finished.")
-print(f"Results saved in: {os.path.abspath(RESULTS_DIR_BSMD)}")
-print(f"Figures saved in: {os.path.abspath(FIGURES_DIR_BSMD)}")
-print("--------------------------------------------")
