@@ -22,7 +22,6 @@ from configs import (
     WINDOW_NORM,
     WINDOW_TYPE,
 )
-from parallel_utils import parallel_map, get_num_workers
 
 # Local application/library specific imports
 from utils import (
@@ -33,6 +32,8 @@ from utils import (
     make_result_filename,
     print_summary,
     spod_function,  # Core SPOD routine for SPODAnalyzer
+    parallel_map,  # For parallel processing of SPOD modes
+    get_num_workers,  # Utility to get number of available CPU threads
 )
 
 

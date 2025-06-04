@@ -32,7 +32,6 @@ import matplotlib.pyplot as plt
 # Third-party imports
 import numpy as np
 import scipy.linalg as eig
-from parallel_utils import get_num_workers
 
 from configs import (
     FIGURES_DIR_BSMD,
@@ -49,6 +48,7 @@ from utils import (
     load_mat_data,  # If used in __main__
     make_result_filename,  # For saving results
     print_summary,
+    get_num_workers,  # For detecting available CPU threads
 )
 
 
