@@ -533,3 +533,23 @@ class BaseAnalyzer:
         print(f"Completed in {end_time - start_time:.2f} seconds.")
 
         return self
+
+    def _get_metadata(self):
+        """Return a dictionary of common metadata for saving results."""
+        meta = {
+            "analysis_type": getattr(self, "analysis_type", ""),
+            "data_file": self.file_path,
+            "nfft": self.nfft,
+            "overlap": self.overlap,
+            "nblocks": self.nblocks,
+            "fs": self.fs,
+            "dt": self.data.get("dt", 0),
+            "Ns": self.data.get("Ns", 0),
+            "Nx": self.data.get("Nx", 0),
+            "Ny": self.data.get("Ny", 0),
+            "spatial_weight_type": self.spatial_weight_type,
+        }
+        for attr in ["window_type", "window_norm", "blockwise_mean", "normvar"]:
+            if hasattr(self, attr):
+                meta[attr] = getattr(self, attr)
+        return meta
