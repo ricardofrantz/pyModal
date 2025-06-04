@@ -461,7 +461,11 @@ class SPODAnalyzer(BaseAnalyzer):
         ax.set_title("SPOD Eigenvalue Spectrum (v2)")
 
         # Set plot limits - adjust as necessary
-        ax.set_xlim(St_plot.min(), St_plot.max())
+        if np.any(St_plot > 0):
+            st_min = St_plot[St_plot > 0].min()
+        else:
+            st_min = St_plot.min()
+        ax.set_xlim(st_min, St_plot.max())
         plot_y_min = y_fill_min * 0.5
         plot_y_max = np.max(np.sum(L_plot, axis=1)) * 2.0
         if plot_y_min > 0 and plot_y_max > 0 and plot_y_min < plot_y_max:
