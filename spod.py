@@ -33,6 +33,7 @@ from utils import (
     spod_function,  # Core SPOD routine for SPODAnalyzer
     print_summary,
 )
+from parallel_utils import parallel_map
 
 
 class SPODAnalyzer(BaseAnalyzer):
@@ -75,7 +76,21 @@ class SPODAnalyzer(BaseAnalyzer):
     ############################################################
     # Initialization and Core Parameters                       #
     ############################################################
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_SPOD, figures_dir=FIGURES_DIR_SPOD, blockwise_mean=False, normvar=False, window_norm=WINDOW_NORM, window_type=WINDOW_TYPE, data_loader=None, spatial_weight_type="auto"):
+    def __init__(
+        self,
+        file_path,
+        nfft=128,
+        overlap=0.5,
+        results_dir=RESULTS_DIR_SPOD,
+        figures_dir=FIGURES_DIR_SPOD,
+        blockwise_mean=False,
+        normvar=False,
+        window_norm=WINDOW_NORM,
+        window_type=WINDOW_TYPE,
+        data_loader=None,
+        spatial_weight_type="auto",
+        n_workers=None,
+    ):
         """
         Initializes the SPODAnalyzer instance.
 
@@ -103,7 +118,16 @@ class SPODAnalyzer(BaseAnalyzer):
                                                  'auto' attempts to detect from filename.
                                                  Defaults to 'auto'.
         """
-        super().__init__(file_path=file_path, nfft=nfft, overlap=overlap, results_dir=results_dir, figures_dir=figures_dir, data_loader=data_loader, spatial_weight_type=spatial_weight_type)
+        super().__init__(
+            file_path=file_path,
+            nfft=nfft,
+            overlap=overlap,
+            results_dir=results_dir,
+            figures_dir=figures_dir,
+            data_loader=data_loader,
+            spatial_weight_type=spatial_weight_type,
+            n_workers=n_workers,
+        )
 
         self._validate_inputs()
         # SPOD specific attributes
@@ -229,14 +253,30 @@ class SPODAnalyzer(BaseAnalyzer):
         self.time_coefficients = np.zeros((n_freq_bins_from_qhat, self.nblocks, self.nblocks), dtype=complex)  # Temporal coefficients
 
         print("Performing SPOD for each frequency...")
-        for i in tqdm(range(n_freq_bins_from_qhat), desc="SPOD Computation", unit="freq"):
-            qhat_freq = self.qhat[i, :, :]  # (Nspace, Nblocks)
-            # Call imported spod_function for the actual computation
-            # Assuming spod_function is designed to return phi, lambda, psi for a single frequency's qhat_freq
-            phi_freq, lambda_freq, psi_freq = spod_function(qhat_freq, self.nblocks, self.dst, self.W, return_psi=True)
-            self.modes[i, :, :] = phi_freq
-            self.eigenvalues[i, :] = lambda_freq
-            self.time_coefficients[i, :, :] = psi_freq
+
+        def compute_freq(i):
+            qhat_freq = self.qhat[i, :, :]
+            phi_freq, lambda_freq, psi_freq = spod_function(
+                qhat_freq,
+                self.nblocks,
+                self.dst,
+                self.W,
+                return_psi=True,
+            )
+            return i, phi_freq, lambda_freq, psi_freq
+
+        if self.n_workers > 1:
+            results = parallel_map(compute_freq, range(n_freq_bins_from_qhat), workers=self.n_workers)
+            for i, phi_freq, lambda_freq, psi_freq in results:
+                self.modes[i, :, :] = phi_freq
+                self.eigenvalues[i, :] = lambda_freq
+                self.time_coefficients[i, :, :] = psi_freq
+        else:
+            for i in tqdm(range(n_freq_bins_from_qhat), desc="SPOD Computation", unit="freq"):
+                _, phi_freq, lambda_freq, psi_freq = compute_freq(i)
+                self.modes[i, :, :] = phi_freq
+                self.eigenvalues[i, :] = lambda_freq
+                self.time_coefficients[i, :, :] = psi_freq
         print(f"SPOD eigenvalue decomposition completed in {time.time() - start_time:.2f} seconds")
 
     ############################################################
