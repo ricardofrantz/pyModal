@@ -22,7 +22,7 @@ from configs import (
     WINDOW_NORM,
     WINDOW_TYPE,
 )
-from parallel_utils import parallel_map
+from parallel_utils import parallel_map, get_num_workers
 
 # Local application/library specific imports
 from utils import (
@@ -321,6 +321,8 @@ class SPODAnalyzer(BaseAnalyzer):
                 del f["Freq"]
             if "St" in f:
                 del f["St"]
+            if "FFTBlocks" in f:
+                del f["FFTBlocks"]
 
             f.create_dataset("Eigenvalues", data=self.eigenvalues, compression="gzip")
             f.create_dataset("Modes", data=self.modes, compression="gzip")
@@ -328,6 +330,8 @@ class SPODAnalyzer(BaseAnalyzer):
                 f.create_dataset("TimeCoefficients", data=self.time_coefficients, compression="gzip")
             f.create_dataset("Freq", data=self.freq, compression="gzip")
             f.create_dataset("St", data=self.St, compression="gzip")
+            if self.qhat is not None and self.qhat.size > 0:
+                f.create_dataset("FFTBlocks", data=self.qhat, compression="gzip")
 
             # Ensure base attributes are also saved if this is the first save operation (mode 'w')
             if mode == "w":
@@ -382,6 +386,7 @@ class SPODAnalyzer(BaseAnalyzer):
 
         # Generate plots
         self.plot_eigenvalues_v2()  # Call the new plotting function
+        self.plot_cumulative_energy()
 
         if plot_modes_options:
             self.plot_modes(**plot_modes_options)
@@ -560,6 +565,29 @@ class SPODAnalyzer(BaseAnalyzer):
             plt.close(fig)
             print(f"SPOD mode plot saved to {plot_filename}")
 
+    def plot_cumulative_energy(self, freq_idx=None):
+        """Plot cumulative energy captured by modes at a given frequency."""
+        if self.eigenvalues.size == 0:
+            print("No eigenvalues to plot. Run perform_spod() first.")
+            return
+        if freq_idx is None:
+            freq_idx = int(np.argmax(self.eigenvalues[:, 0]))
+        lambdas = self.eigenvalues[freq_idx, :]
+        cumulative = np.cumsum(lambdas)
+        cumulative /= cumulative[-1]
+        fig, ax = plt.subplots()
+        ax.plot(np.arange(1, len(cumulative) + 1), cumulative, "o-")
+        ax.set_xlabel("Mode index")
+        ax.set_ylabel("Cumulative energy")
+        ax.set_title(f"Cumulative energy at St={self.St[freq_idx]:.3f}")
+        plot_filename = os.path.join(
+            self.figures_dir,
+            f"{self.data_root}_SPOD_cumulative_St{self.St[freq_idx]:.3f}.{FIG_FORMAT}",
+        )
+        plt.savefig(plot_filename, dpi=FIG_DPI)
+        plt.close(fig)
+        print(f"Cumulative energy plot saved to {plot_filename}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run SPOD analysis")
@@ -568,6 +596,11 @@ if __name__ == "__main__":
     parser.add_argument("--compute", action="store_true", help="Perform SPOD and save results")
     parser.add_argument("--plot", action="store_true", help="Generate default plots")
     args = parser.parse_args()
+
+    threads_available = get_num_workers()
+    print(f"Available CPU threads detected: {threads_available}")
+    if os.environ.get("OMP_NUM_THREADS") is None:
+        print("Set OMP_NUM_THREADS to this value for maximum performance.")
 
     if args.config:
         from configs import load_config
