@@ -121,6 +121,90 @@ def load_data(file_path):
         return load_mat_data(file_path)
 
 
+def generate_dummy_data_like_jetles(
+    output_path: str,
+    Ns: int = 100,
+    Nx: int = 30,
+    Ny: int = 20,
+    dt: float = 0.01,
+    f1: float = 5.0,
+    f2: float = 2.0,
+    noise_level: float = 0.05,
+    save_mat: bool = False,
+) -> str:
+    """Create a small JetLES-like dataset with simple coherent content.
+
+    This utility generates a synthetic pressure field composed of a few
+    low-frequency modes rather than purely random noise.  It is intended for
+    quick demonstrations when no real dataset is available.
+
+    Parameters
+    ----------
+    output_path : str
+        Path to the file to create.
+    Ns : int, optional
+        Number of snapshots (time samples).
+    Nx : int, optional
+        Number of points in the ``x`` direction.
+    Ny : int, optional
+        Number of points in the radial ``r`` direction.
+    dt : float, optional
+        Time step between snapshots.
+    f1, f2 : float, optional
+        Dominant temporal frequencies of the two synthetic modes.
+    noise_level : float, optional
+        Amplitude of added Gaussian noise relative to the signal.
+    save_mat : bool, optional
+        If ``True`` the file is created with ``.mat`` extension, otherwise an
+        HDF5 ``.h5`` file is created.  The function does not require SciPy and
+        always uses ``h5py`` for writing.
+    Returns
+    -------
+    str
+        Path to the generated dummy file.
+    """
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # Coordinates stored as 2-D arrays as in the real dataset
+    x = np.linspace(0.0, 1.0, Nx)[:, None]
+    r = np.linspace(0.0, 1.0, Ny)[None, :]
+
+    # Temporal vector
+    t = np.arange(Ns) * dt
+
+    # Simple spatial modes
+    mode1 = np.sin(np.pi * x) * np.cos(np.pi * r)
+    mode2 = np.cos(0.5 * np.pi * x) * np.sin(2.0 * np.pi * r)
+
+    # Construct coherent pressure field (shape: Nx, Ny, Ns)
+    signal = (
+        np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :]
+        + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
+    )
+
+    noise = noise_level * np.random.randn(Ns, Nx, Ny)
+    p = np.transpose(signal + noise, (1, 2, 0))  # (Nx, Ny, Ns)
+
+    with h5py.File(output_path, "w") as f:
+        f.create_dataset("p", data=p)
+        f.create_dataset("x", data=x)
+        f.create_dataset("r", data=r)
+        f.create_dataset("dt", data=np.array([[dt]]))
+
+    # Optionally save a ``.mat`` file for compatibility with some loaders
+    if save_mat and not output_path.endswith(".mat"):
+        mat_path = os.path.splitext(output_path)[0] + ".mat"
+        with h5py.File(mat_path, "w") as f:
+            f.create_dataset("p", data=p)
+            f.create_dataset("x", data=x)
+            f.create_dataset("r", data=r)
+            f.create_dataset("dt", data=np.array([[dt]]))
+
+    return output_path
+
+
 def calculate_polar_weights(x, y):
     """Calculate integration weights for a 2D cylindrical grid (x, r)."""
     Nx, Ny = x.shape[0], y.shape[0]

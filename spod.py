@@ -455,8 +455,15 @@ if __name__ == "__main__":
 
             data_file = "./data/dummy_jetles_data.h5"  # Create/use an HDF5 dummy file
             if not os.path.exists(data_file):
-                # Adjust Ns, Nx, Ny, Nt as needed for a small, quick test
-                generate_dummy_data_like_jetles(output_path=data_file, Ns=200, Nx=30, Ny=20, Nt=1, save_mat=False)
+                # Generate a small coherent dataset for quick testing
+                generate_dummy_data_like_jetles(
+                    output_path=data_file,
+                    Ns=200,
+                    Nx=30,
+                    Ny=20,
+                    dt=0.01,
+                    save_mat=False,
+                )
             print(f"Using dummy data: {data_file}")
         except ImportError:
             print("Dummy data generator 'generate_dummy_data_like_jetles' not found in utils.py. Exiting.")
