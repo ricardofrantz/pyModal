@@ -38,6 +38,16 @@ git clone https://github.com/ricardofrantz/modal-decomp.git
 cd modal-decomp
 ```
 
+## Installation
+
+Install the required Python packages with:
+
+```bash
+pip install h5py matplotlib numpy scipy tqdm
+```
+
+These scripts were tested on **Python 3.13** running on **Ubuntu 24.04** and **macOS**.
+
 ## Running Tests
 
 Install the dependencies and run the unit tests with:
