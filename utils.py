@@ -7,6 +7,7 @@ All imports are centralized here to keep the code clean and consistent.
 
 from configs import *
 from fft.fft_backends import get_fft_func
+from scipy.signal import get_window
 
 
 def make_result_filename(root, nfft, overlap, Ns, analysis):
@@ -276,7 +277,9 @@ def blocksfft(q, nfft, nblocks, novlap, blockwise_mean=False, normvar=False, win
     blockwise_mean (bool): Subtract blockwise mean if True
     normvar (bool): Normalize variance if True
     window_norm (str): Window normalization type ('amplitude' or 'power')
-    window_type (str): Window type ('hamming' or 'sine')
+    window_type (str): Window type. Use 'sine' for the custom sine window or any
+        name recognized by ``scipy.signal.get_window`` (e.g., 'hamming', 'hann',
+        'blackman', etc.)
 
     Returns:
     q_hat (np.ndarray): FFT coefficients [freq, space, block]
@@ -292,7 +295,7 @@ def blocksfft(q, nfft, nblocks, novlap, blockwise_mean=False, normvar=False, win
     if window_type == "sine":
         window = sine_window(nfft)
     else:
-        window = np.hamming(nfft)
+        window = get_window(window_type, nfft)
 
     # Normalize window
     if window_norm == "amplitude":
