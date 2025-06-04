@@ -17,8 +17,8 @@ from tqdm import tqdm
 from configs import (
     FIG_DPI,
     FIG_FORMAT,
-    FIGURES_DIR,
-    RESULTS_DIR,
+    FIGURES_DIR_SPOD,
+    RESULTS_DIR_SPOD,
     WINDOW_NORM,
     WINDOW_TYPE,
 )
@@ -74,7 +74,7 @@ class SPODAnalyzer(BaseAnalyzer):
     ############################################################
     # Initialization and Core Parameters                       #
     ############################################################
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, blockwise_mean=False, normvar=False, window_norm=WINDOW_NORM, window_type=WINDOW_TYPE, data_loader=None, spatial_weight_type="auto"):
+    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_SPOD, figures_dir=FIGURES_DIR_SPOD, blockwise_mean=False, normvar=False, window_norm=WINDOW_NORM, window_type=WINDOW_TYPE, data_loader=None, spatial_weight_type="auto"):
         """
         Initializes the SPODAnalyzer instance.
 
@@ -84,9 +84,9 @@ class SPODAnalyzer(BaseAnalyzer):
             overlap (float, optional): Overlap fraction between FFT blocks (0 to <1).
                                      Defaults to 0.5 (50% overlap).
             results_dir (str, optional): Directory to save analysis results (HDF5 files).
-                                         Defaults to `RESULTS_DIR` from `configs.py`.
+                                         Defaults to `RESULTS_DIR_SPOD` from `configs.py`.
             figures_dir (str, optional): Directory to save generated plots.
-                                         Defaults to `FIGURES_DIR` from `configs.py`.
+                                         Defaults to `FIGURES_DIR_SPOD` from `configs.py`.
             blockwise_mean (bool, optional): If True, subtracts the mean of each block before FFT.
                                            If False, subtracts the global mean. Defaults to False.
             normvar (bool, optional): If True, normalizes FFT blocks by variance.
@@ -599,6 +599,6 @@ if __name__ == "__main__":
 
     print("\n--------------------------------------------")
     print("SPOD analysis script finished.")
-    print(f"Results saved in: {os.path.abspath(RESULTS_DIR)}")
-    print(f"Figures saved in: {os.path.abspath(FIGURES_DIR)}")
+    print(f"Results saved in: {os.path.abspath(RESULTS_DIR_SPOD)}")
+    print(f"Figures saved in: {os.path.abspath(FIGURES_DIR_SPOD)}")
     print("--------------------------------------------")

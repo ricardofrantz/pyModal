@@ -32,7 +32,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg as eig
 
-from configs import FIGURES_DIR, RESULTS_DIR
+from configs import (
+    FIGURES_DIR_BSMD,
+    RESULTS_DIR_BSMD,
+)
 
 # Local application/library specific imports
 from utils import (
@@ -161,7 +164,7 @@ class BSMDAnalyzer(BaseAnalyzer):
                       and preprocessing.
     """
 
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, data_loader=None, spatial_weight_type="auto", use_static_triads=True, static_triads=ALL_TRIADS):
+    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_BSMD, figures_dir=FIGURES_DIR_BSMD, data_loader=None, spatial_weight_type="auto", use_static_triads=True, static_triads=ALL_TRIADS):
         """
         Initialize the BSMDAnalyzer.
 
@@ -172,9 +175,9 @@ class BSMDAnalyzer(BaseAnalyzer):
             overlap (float, optional): Overlap ratio between FFT segments (0 to 1).
                                      Defaults to 0.5.
             results_dir (str, optional): Directory to save analysis results (HDF5 files).
-                                         Defaults to `RESULTS_DIR` from `configs.py`.
+                                         Defaults to `RESULTS_DIR_BSMD` from `configs.py`.
             figures_dir (str, optional): Directory to save generated plots.
-                                         Defaults to `FIGURES_DIR` from `configs.py`.
+                                         Defaults to `FIGURES_DIR_BSMD` from `configs.py`.
             data_loader (callable, optional): Custom function to load data from `file_path`.
                                               If None, `BaseAnalyzer` attempts to auto-detect.
                                               Defaults to None.
@@ -491,8 +494,8 @@ if __name__ == "__main__":
         file_path=data_file,
         nfft=128,
         overlap=0.5,
-        results_dir=RESULTS_DIR,  # HDF files go here
-        figures_dir=FIGURES_DIR,  # PNG files go here
+        results_dir=RESULTS_DIR_BSMD,  # HDF files go here
+        figures_dir=FIGURES_DIR_BSMD,  # PNG files go here
         data_loader=loader,
         spatial_weight_type=spatial_weight,
         use_static_triads=True,
@@ -509,7 +512,7 @@ if __name__ == "__main__":
     plt.title("BSMD eigenvalue magnitudes")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(os.path.join(FIGURES_DIR, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
+    plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
     plt.close()
 
     # **Additional Figures per Schmidt (2020)**
@@ -523,7 +526,7 @@ if __name__ == "__main__":
     plt.title("BSMD eigenvalues (complex plane)")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(os.path.join(FIGURES_DIR, f"{analyzer.data_root}_BSMD_eig_complex_plane.png"))
+    plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eig_complex_plane.png"))
     plt.close()
 
     # **Function to Translate Triad Indices to Strouhal Numbers**
@@ -583,7 +586,7 @@ if __name__ == "__main__":
             axs[i, 0].set_xlabel("y")
             axs[i, 1].set_xlabel("y")
     plt.tight_layout()
-    fig.savefig(os.path.join(FIGURES_DIR, f"{analyzer.data_root}_BSMD_modes_top_5_triads.png"))
+    fig.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_modes_top_5_triads.png"))
     plt.close(fig)
 
     # **Plot 4: BSMD Eigenvalue Magnitudes in (St_1, St_2) Plane with Full and Zoomed-In Views**
@@ -713,13 +716,13 @@ if __name__ == "__main__":
 
 # Finalize and save the plot
 plt.tight_layout()
-output_file = os.path.join(FIGURES_DIR, f"{analyzer.data_root}_BSMD_eig_St1St2_plane.png")
+output_file = os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eig_St1St2_plane.png")
 plt.savefig(output_file)
 plt.close()
 print(f"Plot saved to {output_file}")
 
 print("\n--------------------------------------------")
 print("BSMD analysis script finished.")
-print(f"Results saved in: {os.path.abspath(RESULTS_DIR)}")
-print(f"Figures saved in: {os.path.abspath(FIGURES_DIR)}")
+print(f"Results saved in: {os.path.abspath(RESULTS_DIR_BSMD)}")
+print(f"Figures saved in: {os.path.abspath(FIGURES_DIR_BSMD)}")
 print("--------------------------------------------")

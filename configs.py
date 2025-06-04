@@ -25,9 +25,23 @@ Configuration and shared imports for modal decomposition tools.
 """
 
 # Default directories
-RESULTS_DIR = "./preprocess"
-FIGURES_DIR = "./figs"
+RESULTS_DIR = "./preprocess"  # Legacy generic results
+FIGURES_DIR = "./figs"  # Legacy generic figures
 CACHE_DIR = "./cache"
+
+# Analyzer-specific directories
+RESULTS_DIR_SPOD = "./results_spod"
+RESULTS_DIR_POD = "./results_pod"
+RESULTS_DIR_BSMD = "./results_bsmd"
+
+FIGURES_DIR_SPOD = "./figs_spod"
+FIGURES_DIR_POD = "./figs_pod"
+FIGURES_DIR_BSMD = "./figs_bsmd"
+
+# Optional preprocessing directories
+PREPROCESS_DIR_SPOD = "./preprocess_spod"
+PREPROCESS_DIR_POD = "./preprocess_pod"
+PREPROCESS_DIR_BSMD = "./preprocess_bsmd"
 
 # Figure saving options
 FIG_DPI = 300

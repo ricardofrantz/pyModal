@@ -874,7 +874,7 @@ class SPODAnalyzer(BaseAnalyzer):
     the other metadata to `self.data`.
     """
 
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, blockwise_mean=False, normvar=False, window_norm="power", window_type="hamming", data_loader=None, spatial_weight_type="auto"):
+    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_SPOD, figures_dir=FIGURES_DIR_SPOD, blockwise_mean=False, normvar=False, window_norm="power", window_type="hamming", data_loader=None, spatial_weight_type="auto"):
         super().__init__(file_path=file_path, nfft=nfft, overlap=overlap, results_dir=results_dir, figures_dir=figures_dir, data_loader=data_loader, spatial_weight_type=spatial_weight_type)
         self.blockwise_mean = blockwise_mean
         self.normvar = normvar
