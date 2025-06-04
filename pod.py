@@ -24,7 +24,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg  # For eigh
 
-from configs import CMAP_DIV, CMAP_SEQ, FIGURES_DIR, RESULTS_DIR
+from configs import (
+    CMAP_DIV,
+    CMAP_SEQ,
+    FIGURES_DIR_POD,
+    RESULTS_DIR_POD,
+)
 
 # Local application/library specific imports
 from utils import (
@@ -70,16 +75,16 @@ class PODAnalyzer(BaseAnalyzer):
                       but are initialized with dummy values.
     """
 
-    def __init__(self, file_path, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, data_loader=None, spatial_weight_type="auto", n_modes_save=10):
+    def __init__(self, file_path, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=None, spatial_weight_type="auto", n_modes_save=10):
         """
         Initialize the PODAnalyzer.
 
         Args:
             file_path (str): Path to the data file (e.g., .mat, .h5).
             results_dir (str, optional): Directory to save analysis results (HDF5 files).
-                                         Defaults to `RESULTS_DIR` from `configs.py`.
+                                         Defaults to `RESULTS_DIR_POD` from `configs.py`.
             figures_dir (str, optional): Directory to save generated plots.
-                                         Defaults to `FIGURES_DIR` from `configs.py`.
+                                         Defaults to `FIGURES_DIR_POD` from `configs.py`.
             data_loader (callable, optional): Custom function to load data from `file_path`.
                                               If None, `BaseAnalyzer` attempts to auto-detect.
                                               Defaults to None.
@@ -343,6 +348,13 @@ class PODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = x_coords.max() - x_coords.min()
+            dy = y_coords.max() - y_coords.min()
+            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+        else:
+            aspect_ratio = "auto"
+
         # Determine if plotting 1D or 2D modes
         is_2d_plot = (self.modes.shape[0] == Nx * Ny) and (Nx > 1 and Ny > 1)
 
@@ -360,7 +372,7 @@ class PODAnalyzer(BaseAnalyzer):
                 mode_reshaped = mode_to_plot.reshape(Nx, Ny)
                 # Determine extent for imshow if x,y are 1D arrays
                 extent = [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()] if x_coords.ndim == 1 and y_coords.ndim == 1 else None
-                plt.imshow(mode_reshaped.T, aspect="auto", origin="lower", extent=extent, cmap=CMAP_SEQ)
+                plt.imshow(mode_reshaped.T, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_SEQ)
                 plt.colorbar(label="Mode Amplitude")
                 plt.xlabel("X")
                 plt.ylabel("Y")
@@ -538,6 +550,13 @@ class PODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = x_coords.max() - x_coords.min()
+            dy = y_coords.max() - y_coords.min()
+            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+        else:
+            aspect_ratio = "auto"
+
         num_snapshots_to_show = len(snapshot_indices_to_plot)
         num_recons_per_snapshot = len(modes_for_reconstruction)
 
@@ -553,7 +572,7 @@ class PODAnalyzer(BaseAnalyzer):
             if is_2d_plot:
                 img_data = original_snapshot.reshape(Nx, Ny).T
                 extent = [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()] if x_coords.ndim == 1 and y_coords.ndim == 1 else None
-                im = ax.imshow(img_data, aspect="auto", origin="lower", extent=extent, cmap=CMAP_DIV)
+                im = ax.imshow(img_data, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_DIV)
                 fig.colorbar(im, ax=ax, label="Amplitude")
                 ax.set_xlabel("X")
                 ax.set_ylabel("Y")
@@ -573,7 +592,7 @@ class PODAnalyzer(BaseAnalyzer):
 
                 if is_2d_plot:
                     img_data_recon = reconstructed_snapshot_k.reshape(Nx, Ny).T
-                    im = ax.imshow(img_data_recon, aspect="auto", origin="lower", extent=extent, cmap=CMAP_DIV)
+                    im = ax.imshow(img_data_recon, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_DIV)
                     fig.colorbar(im, ax=ax, label="Amplitude")
                     ax.set_xlabel("X")
                     ax.set_ylabel("Y")
@@ -837,8 +856,7 @@ if __name__ == "__main__":
             print(f"Unknown case: Using load_mat_data and '{spatial_weights_main}' weights.")
 
     # Create POD analyzer instance
-    pod_analyzer = PODAnalyzer(file_path=data_file, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, data_loader=data_loader_main, spatial_weight_type=spatial_weights_main, n_modes_save=n_modes_to_save_main)
+    pod_analyzer = PODAnalyzer(file_path=data_file, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=data_loader_main, spatial_weight_type=spatial_weights_main, n_modes_save=n_modes_to_save_main)
 
     # Run the full analysis and plotting pipeline
     pod_analyzer.run_analysis(plot_n_modes_spatial=n_modes_to_plot_spatial_main, plot_n_coeffs_time=n_coeffs_to_plot_time_main)
-

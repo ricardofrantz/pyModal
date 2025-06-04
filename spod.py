@@ -17,8 +17,8 @@ from tqdm import tqdm
 from configs import (
     FIG_DPI,
     FIG_FORMAT,
-    FIGURES_DIR,
-    RESULTS_DIR,
+    FIGURES_DIR_SPOD,
+    RESULTS_DIR_SPOD,
     WINDOW_NORM,
     WINDOW_TYPE,
 )
@@ -75,7 +75,7 @@ class SPODAnalyzer(BaseAnalyzer):
     ############################################################
     # Initialization and Core Parameters                       #
     ############################################################
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR, figures_dir=FIGURES_DIR, blockwise_mean=False, normvar=False, window_norm=WINDOW_NORM, window_type=WINDOW_TYPE, data_loader=None, spatial_weight_type="auto"):
+    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_SPOD, figures_dir=FIGURES_DIR_SPOD, blockwise_mean=False, normvar=False, window_norm=WINDOW_NORM, window_type=WINDOW_TYPE, data_loader=None, spatial_weight_type="auto"):
         """
         Initializes the SPODAnalyzer instance.
 
@@ -85,9 +85,9 @@ class SPODAnalyzer(BaseAnalyzer):
             overlap (float, optional): Overlap fraction between FFT blocks (0 to <1).
                                      Defaults to 0.5 (50% overlap).
             results_dir (str, optional): Directory to save analysis results (HDF5 files).
-                                         Defaults to `RESULTS_DIR` from `configs.py`.
+                                         Defaults to `RESULTS_DIR_SPOD` from `configs.py`.
             figures_dir (str, optional): Directory to save generated plots.
-                                         Defaults to `FIGURES_DIR` from `configs.py`.
+                                         Defaults to `FIGURES_DIR_SPOD` from `configs.py`.
             blockwise_mean (bool, optional): If True, subtracts the mean of each block before FFT.
                                            If False, subtracts the global mean. Defaults to False.
             normvar (bool, optional): If True, normalizes FFT blocks by variance.
@@ -476,6 +476,13 @@ class SPODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = x_coords.max() - x_coords.min()
+            dy = y_coords.max() - y_coords.min()
+            aspect_ratio = dx / dy if dx > 0 and dy > 0 else "auto"
+        else:
+            aspect_ratio = "auto"
+
         for f_idx in freq_indices:
             st_val = self.St[f_idx]
             n_modes = len(modes_to_plot)
@@ -492,7 +499,7 @@ class SPODAnalyzer(BaseAnalyzer):
                 if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
                     mode_2d = mode_real.reshape(Nx, Ny).T
                     im = axes[i].contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
-                    axes[i].set_aspect("auto")
+                    axes[i].set_aspect(aspect_ratio)
                 else:
                     im = axes[i].plot(mode_real)
                 axes[i].set_title(f"Mode {m_idx + 1}")
@@ -592,4 +599,3 @@ if __name__ == "__main__":
 
     # Example of calling plot_eigenvalues_v2 directly if needed for specific params
     # analyzer.plot_eigenvalues_v2(n_modes_line_plot=15, shading_cmap='viridis_r')
-
