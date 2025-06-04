@@ -32,10 +32,12 @@ import matplotlib.pyplot as plt
 # Third-party imports
 import numpy as np
 import scipy.linalg as eig
+from parallel_utils import get_num_workers
 
 from configs import (
     FIGURES_DIR_BSMD,
     RESULTS_DIR_BSMD,
+    RESULTS_DIR_SPOD,
 )
 
 # Local application/library specific imports
@@ -253,7 +255,32 @@ class BSMDAnalyzer(BaseAnalyzer):
             St (np.ndarray): Array of Strouhal numbers (if applicable).
             nblocks (int): Number of blocks in the STFT.
         """
-        super().compute_fft_blocks()  # Leverages BaseAnalyzer's core logic
+        # Try to reuse FFT blocks saved by a previous SPOD run
+        loaded = False
+        fname = make_result_filename(
+            self.data_root,
+            self.nfft,
+            self.overlap,
+            self.data.get("Ns", 0),
+            "spod",
+        )
+        spod_path = os.path.join(RESULTS_DIR_SPOD, fname)
+        if os.path.exists(spod_path):
+            with h5py.File(spod_path, "r") as f:
+                if "FFTBlocks" in f:
+                    qhat_cached = f["FFTBlocks"][:]
+                    if qhat_cached.shape[0] == self.nfft // 2 + 1:
+                        self.qhat = qhat_cached
+                        self.nblocks = qhat_cached.shape[2]
+                        loaded = True
+                        print(f"Reusing cached FFT blocks from {spod_path}")
+
+        if not loaded:
+            super().compute_fft_blocks()  # Leverages BaseAnalyzer's core logic
+
+        # Set frequency and Strouhal vectors after qhat is available
+        self.freq = np.fft.rfftfreq(self.nfft, d=1.0 / self.fs)
+        self.St = self.freq  # Default: Strouhal equals frequency if no scaling
 
     # Main method to perform BSMD analysis based on configuration.
     def perform_bsmd(self):
@@ -485,6 +512,11 @@ if __name__ == "__main__":
     parser.add_argument("--compute", action="store_true", help="Perform BSMD and save results")
     parser.add_argument("--plot", action="store_true", help="Generate example plots")
     args = parser.parse_args()
+
+    threads_available = get_num_workers()
+    print(f"Available CPU threads detected: {threads_available}")
+    if os.environ.get("OMP_NUM_THREADS") is None:
+        print("Set OMP_NUM_THREADS to this value for maximum performance.")
 
     data_file = "./data/jetLES.mat"
 
