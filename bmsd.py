@@ -139,8 +139,8 @@ class BSMDAnalyzer(BaseAnalyzer):
     - Bispectrum: B(f1, f2) = < X(f1) X(f2) X*(f1+f2) >, measures the statistical
       dependence between three frequency components satisfying the triadic relation f1 + f2 = f3.
     - Triad: A set of three frequencies (f1, f2, f3) such that f1 + f2 = f3.
-    - BSMD Eigenvalue Problem: Solved for each triad to find modes (Phi1, Phi2) and
-      eigenvalues (lambda) that characterize the strength and spatial structure of the interaction.
+    - BSMD Eigenvalue Problem: Solved for each triad to find modes (modes1, modes2) and
+      eigenvalues that characterize the strength and spatial structure of the interaction.
 
     The typical BSMD process involves:
     1. Computing FFT blocks of the data (e.g., using Welch's method) to get q_hat[f, j, b]
@@ -149,12 +149,12 @@ class BSMDAnalyzer(BaseAnalyzer):
        a. Form auxiliary matrices A_jb = conj(q_hat[p1,j,b] * q_hat[p2,j,b]) and B_jb = q_hat[p3,j,b].
        b. Construct the bispectral correlation matrix C_bb' = sum_j (A_jb^* W_j B_jb').
        c. Solve the eigenvalue problem: C a = lambda a.
-    3. Reconstruct spatial modes: Phi1_j = sum_b (a_b^* B_jb) and Phi2_j = sum_b (a_b^* A_jb).
+    3. Reconstruct spatial modes: modes1_j = sum_b (a_b^* B_jb) and modes2_j = sum_b (a_b^* A_jb).
 
     Key Attributes:
-        Phi1 (np.ndarray): BSMD spatial modes (related to f1, f2 interaction product).
+        modes1 (np.ndarray): BSMD spatial modes (related to f1, f2 interaction product).
                            Shape: (n_triads, n_spatial_points).
-        Phi2 (np.ndarray): BSMD spatial modes (related to f3).
+        modes2 (np.ndarray): BSMD spatial modes (related to f3).
                            Shape: (n_triads, n_spatial_points).
         eigenvalues (np.ndarray): BSMD eigenvalues (lambda), complex values indicating interaction strength and phase.
                                   Shape: (n_triads,).
@@ -200,9 +200,9 @@ class BSMDAnalyzer(BaseAnalyzer):
         self.static_triads_list = static_triads if use_static_triads else []
 
         # BSMD specific attributes
-        self.Phi1 = np.array([])  # BSMD spatial modes (Phi_alpha)
-        self.Phi2 = np.array([])  # BSMD spatial modes (Phi_beta)
-        self.eigenvalues = np.array([])  # BSMD eigenvalues (lambda_vals)
+        self.modes1 = np.array([])  # BSMD spatial modes (interaction product)
+        self.modes2 = np.array([])  # BSMD spatial modes (third frequency)
+        self.eigenvalues = np.array([])  # BSMD eigenvalues
         self.triads = np.array([])  # Triads (f_alpha, f_beta, f_gamma)
         self.freq_alpha_idx = np.array([], dtype=int)
 
@@ -222,10 +222,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         self.fs = 0.0
         self.qhat = np.array([])
         self.triads = []
-        self.a = np.array([])
-        self.lambda_vals = np.array([])
-        self.Phi1 = np.array([])
-        self.Phi2 = np.array([])
+        self.modes1 = np.array([])
+        self.modes2 = np.array([])
         self.freq = None
         self.St = None
 
@@ -305,8 +303,8 @@ class BSMDAnalyzer(BaseAnalyzer):
             # self._perform_dynamic_bsmd_core() # This would be the actual dynamic triad computation
             print("Dynamic BSMD core logic not yet fully implemented in this refactor.")
             # For now, just set empty results to avoid errors in subsequent steps
-            self.Phi1 = np.array([])
-            self.Phi2 = np.array([])
+            self.modes1 = np.array([])
+            self.modes2 = np.array([])
             self.eigenvalues = np.array([])
             self.triads = np.array([])
 
@@ -324,12 +322,12 @@ class BSMDAnalyzer(BaseAnalyzer):
         3. Constructs the bispectral correlation matrix C_bb' using `self.W` for spatial weighting.
         4. Solves the eigenvalue problem C a = lambda a. The dominant eigenvalue and corresponding
            eigenvector are typically selected.
-        5. Reconstructs the spatial BSMD modes Phi1 and Phi2.
+        5. Reconstructs the spatial BSMD modes modes1 and modes2.
 
         Attributes set/appended:
             eigenvalues (list): Appends the dominant BSMD eigenvalue for each triad.
-            Phi1 (list of np.ndarray): Appends the BSMD mode Phi1 for each triad.
-            Phi2 (list of np.ndarray): Appends the BSMD mode Phi2 for each triad.
+            modes1 (list of np.ndarray): Appends the BSMD mode modes1 for each triad.
+            modes2 (list of np.ndarray): Appends the BSMD mode modes2 for each triad.
             triads (list of tuples): Stores the (p1, p2, p3) triad being processed.
         Finally, these lists are converted to numpy arrays.
         """
@@ -337,8 +335,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         start_time = time.time()
         if not self.static_triads_list or len(self.static_triads_list) == 0:
             print("Error: Static triads list is empty. Cannot perform static BSMD.")
-            self.Phi1 = np.array([])
-            self.Phi2 = np.array([])
+            self.modes1 = np.array([])
+            self.modes2 = np.array([])
             self.eigenvalues = np.array([])
             self.triads = np.array([])
             return
@@ -348,8 +346,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         num_triads = len(self.static_triads_list)
         Nspace = self.qhat.shape[1]  # Number of spatial points
 
-        self.Phi1 = np.zeros((num_triads, Nspace), dtype=complex)
-        self.Phi2 = np.zeros((num_triads, Nspace), dtype=complex)
+        self.modes1 = np.zeros((num_triads, Nspace), dtype=complex)
+        self.modes2 = np.zeros((num_triads, Nspace), dtype=complex)
         self.eigenvalues = np.zeros(num_triads, dtype=float)  # Eigenvalues are real
         self.triads = np.array(self.static_triads_list)  # Store the used triads
 
@@ -385,8 +383,8 @@ class BSMDAnalyzer(BaseAnalyzer):
                 print(f"Warning: Could not find matching frequencies for triad St=({st_alpha_target},{st_beta_target},{st_gamma_target}). Skipping.")
                 # Set corresponding results to NaN or handle as appropriate
                 self.eigenvalues[i] = np.nan
-                self.Phi1[i, :] = np.nan
-                self.Phi2[i, :] = np.nan
+                self.modes1[i, :] = np.nan
+                self.modes2[i, :] = np.nan
                 continue
 
             # Extract FFT data for the triad frequencies
@@ -408,25 +406,25 @@ class BSMDAnalyzer(BaseAnalyzer):
             if Q_alpha.shape[1] == 0 or Q_beta.shape[1] == 0:  # Nblocks is 0
                 print(f"Warning: Zero blocks for triad {i}. Skipping.")
                 self.eigenvalues[i] = np.nan
-                self.Phi1[i, :] = np.nan
-                self.Phi2[i, :] = np.nan
+                self.modes1[i, :] = np.nan
+                self.modes2[i, :] = np.nan
                 continue
 
             target_matrix = (Q_alpha @ Q_beta.conj().T) / Q_alpha.shape[1]  # Nspace x Nspace
 
             try:
-                # Perform SVD. U corresponds to Phi1, V.conj().T to Phi2, s to singular values (lambda_vals)
+                # Perform SVD. U corresponds to modes1, V.conj().T to modes2, s to singular values
                 U, s, Vh = np.linalg.svd(target_matrix)
 
                 # Store the leading modes and singular value
-                self.Phi1[i, :] = U[:, 0]  # Leading left singular vector
-                self.Phi2[i, :] = Vh[0, :].conj()  # Leading right singular vector (conjugated)
+                self.modes1[i, :] = U[:, 0]  # Leading left singular vector
+                self.modes2[i, :] = Vh[0, :].conj()  # Leading right singular vector (conjugated)
                 self.eigenvalues[i] = s[0]  # Leading singular value (this is lambda_val for the triad)
             except np.linalg.LinAlgError as e:
                 print(f"SVD failed for triad {i} (St={st_alpha_target},{st_beta_target},{st_gamma_target}): {e}")
                 self.eigenvalues[i] = np.nan
-                self.Phi1[i, :] = np.nan
-                self.Phi2[i, :] = np.nan
+                self.modes1[i, :] = np.nan
+                self.modes2[i, :] = np.nan
 
         print(f"Static BSMD core analysis completed in {time.time() - start_time:.2f} seconds.")
 
@@ -458,8 +456,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         Datasets saved:
             'Triads': List of analyzed frequency index triads (p1, p2, p3).
             'Eigenvalues': Complex BSMD eigenvalues for each triad.
-            'Phi1': BSMD spatial modes (Phi_alpha) for each triad.
-            'Phi2': BSMD spatial modes (Phi_beta) for each triad.
+            'Modes1': BSMD spatial modes (interaction product) for each triad.
+            'Modes2': BSMD spatial modes (third frequency) for each triad.
             'Weights': Spatial weighting matrix (diagonal) used in the analysis.
             'Frequencies': Frequency vector corresponding to FFT bins.
             'fs': Sampling frequency.
@@ -477,8 +475,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         with h5py.File(results_path, "w") as f:
             f.create_dataset("triads", data=np.array(self.triads))
             f.create_dataset("eigenvalues", data=self.eigenvalues)  # Changed from 'Lambda'
-            f.create_dataset("Phi1", data=self.Phi1)
-            f.create_dataset("Phi2", data=self.Phi2)
+            f.create_dataset("Modes1", data=self.modes1)
+            f.create_dataset("Modes2", data=self.modes2)
             f.create_dataset("x", data=self.data["x"])
             f.create_dataset("y", data=self.data["y"])
             f.create_dataset("W", data=self.W)
@@ -494,7 +492,7 @@ class BSMDAnalyzer(BaseAnalyzer):
            This step sets `self.qhat`, `self.W`, `self.freq`, `self.fs`, etc.
         2. Performs BSMD computation (calls `perform_bsmd`), which internally chooses
            between static or dynamic triad analysis (currently static is implemented).
-           This step sets `self.Phi1`, `self.Phi2`, `self.eigenvalues`, `self.triads`.
+           This step sets `self.modes1`, `self.modes2`, `self.eigenvalues`, `self.triads`.
         3. Saves the results to an HDF5 file (calls `save_results`).
 
         This is the primary method to call to run a complete BSMD study on a dataset.

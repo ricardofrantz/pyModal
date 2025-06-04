@@ -145,8 +145,8 @@ class PODAnalyzer(BaseAnalyzer):
 
         # Data is expected as [time, space]
         data_matrix = self.data["q"]  # Shape (Ns, Nspace)
-        Ns = self.data["Ns"]
-        Nspace = data_matrix.shape[1]
+        num_snapshots = self.data["Ns"]
+        num_space_points = data_matrix.shape[1]
 
         # 1. Subtract temporal mean
         # For POD, typically the mean over snapshots is removed.
@@ -160,17 +160,17 @@ class PODAnalyzer(BaseAnalyzer):
         # PySPOD uses d.conj().T @ (d * self._weights), where d is [Nspace, Ntime] and weights are [Nspace, 1]
         # Let's ensure W is a 1D array of weights for element-wise multiplication with spatial dimensions.
         if self.W.ndim == 2 and self.W.shape[0] == self.W.shape[1]:
-            weights_vector = np.diag(self.W)
+            weight_vector = np.diag(self.W)
         elif self.W.ndim == 1:
-            weights_vector = self.W
+            weight_vector = self.W
         elif self.W.ndim == 2 and self.W.shape[1] == 1:  # Handle (Nspace, 1) column vector
-            weights_vector = self.W.flatten()
+            weight_vector = self.W.flatten()
         else:
             raise ValueError(f"Unexpected shape for spatial weights W: {self.W.shape}")
 
         # data_mean_removed is (Ns, Nspace). Apply weights to spatial dimension.
         # (data_mean_removed * sqrt(weights_vector)) results in shape (Ns, Nspace)
-        data_weighted = data_mean_removed * np.sqrt(weights_vector)  # Element-wise multiplication
+        data_weighted = data_mean_removed * np.sqrt(weight_vector)  # Element-wise multiplication
 
         # 3. Form covariance matrix (Temporal covariance K_ij = <u_i(t) u_j(t)>_t )
         # Using method of snapshots: C = X^T * X where X is (Ns, Nspace_weighted)
@@ -185,9 +185,9 @@ class PODAnalyzer(BaseAnalyzer):
         # K_s = data_weighted.T @ data_weighted  (Nspace, Nspace) -- Spatial kernel
         # For Ns < Nspace, solve temporal kernel. For Nspace < Ns, solve spatial kernel.
 
-        if Ns < Nspace:
-            print(f"Number of snapshots ({Ns}) < number of spatial points ({Nspace}). Solving temporal eigenvalue problem.")
-            K = (1.0 / Ns) * (data_weighted @ data_weighted.T)  # (Ns, Ns)
+        if num_snapshots < num_space_points:
+            print(f"Number of snapshots ({num_snapshots}) < number of spatial points ({num_space_points}). Solving temporal eigenvalue problem.")
+            K = (1.0 / num_snapshots) * (data_weighted @ data_weighted.T)  # (Ns, Ns)
             eigenvalues_temp, temporal_coeffs_unscaled = scipy.linalg.eigh(K)
             # Sort eigenvalues and eigenvectors in descending order
             sorted_indices = np.argsort(eigenvalues_temp)[::-1]
@@ -211,12 +211,12 @@ class PODAnalyzer(BaseAnalyzer):
             # Phi_w = X_w^T Psi_w / sqrt(Lambda). Here Phi_w = Phi * sqrt(W).
             # So, Phi = (X_w^T Psi_w / sqrt(Lambda)) / sqrt(W)
             # modes_temp = data_weighted.T @ temporal_coeffs_unscaled is (Nspace, Ns) = X_w^T Psi_w
-            self.modes = (modes_temp / np.sqrt(self.eigenvalues * Ns)) / np.sqrt(weights_vector[:, np.newaxis])
-            self.time_coefficients = temporal_coeffs_unscaled * np.sqrt(self.eigenvalues * Ns)  # Scale temporal coefficients
+            self.modes = (modes_temp / np.sqrt(self.eigenvalues * num_snapshots)) / np.sqrt(weight_vector[:, np.newaxis])
+            self.time_coefficients = temporal_coeffs_unscaled * np.sqrt(self.eigenvalues * num_snapshots)  # Scale temporal coefficients
 
         else:
-            print(f"Number of spatial points ({Nspace}) <= number of snapshots ({Ns}). Solving spatial eigenvalue problem.")
-            K = (1.0 / Ns) * (data_weighted.T @ data_weighted)  # (Nspace, Nspace)
+            print(f"Number of spatial points ({num_space_points}) <= number of snapshots ({num_snapshots}). Solving spatial eigenvalue problem.")
+            K = (1.0 / num_snapshots) * (data_weighted.T @ data_weighted)  # (Nspace, Nspace)
             eigenvalues_spatial, spatial_modes_weighted = scipy.linalg.eigh(K)
             # Sort eigenvalues and eigenvectors
             sorted_indices = np.argsort(eigenvalues_spatial)[::-1]
@@ -224,7 +224,7 @@ class PODAnalyzer(BaseAnalyzer):
             spatial_modes_weighted = spatial_modes_weighted[:, sorted_indices]
             # Spatial modes (weighted) are eigenvectors of K_s.
             # To get unweighted modes: Phi = Phi_w / sqrt(W)
-            self.modes = spatial_modes_weighted / np.sqrt(weights_vector[:, np.newaxis])
+            self.modes = spatial_modes_weighted / np.sqrt(weight_vector[:, np.newaxis])
             # Calculate temporal coefficients: Psi = X @ Phi (project original mean-removed data onto unweighted modes)
             # data_mean_removed is (Ns, Nspace). self.modes is (Nspace, n_modes_save)
             self.time_coefficients = data_mean_removed @ self.modes
@@ -519,12 +519,12 @@ class PODAnalyzer(BaseAnalyzer):
 
         data_matrix = self.data["q"]
         data_mean_removed = data_matrix - self.temporal_mean
-        Ns, Nspace = data_mean_removed.shape
+        num_snapshots, num_space_points = data_mean_removed.shape
 
         if snapshot_indices_to_plot is None:
-            snapshot_indices_to_plot = [0, Ns // 2, Ns - 1]
-            # Ensure indices are unique and within bounds, especially for small Ns
-            snapshot_indices_to_plot = sorted(list(set(idx for idx in snapshot_indices_to_plot if 0 <= idx < Ns)))
+            snapshot_indices_to_plot = [0, num_snapshots // 2, num_snapshots - 1]
+            # Ensure indices are unique and within bounds, especially for small datasets
+            snapshot_indices_to_plot = sorted(list(set(idx for idx in snapshot_indices_to_plot if 0 <= idx < num_snapshots)))
             if not snapshot_indices_to_plot:  # if Ns is too small, pick at least the first one
                 snapshot_indices_to_plot = [0]
 
@@ -544,9 +544,9 @@ class PODAnalyzer(BaseAnalyzer):
             return
 
         # Determine plot layout details (similar to plot_modes)
-        Nx = self.data.get("Nx", int(np.sqrt(Nspace)))
-        Ny = self.data.get("Ny", int(np.sqrt(Nspace)))
-        is_2d_plot = (Nspace == Nx * Ny) and (Nx > 1 and Ny > 1)
+        Nx = self.data.get("Nx", int(np.sqrt(num_space_points)))
+        Ny = self.data.get("Ny", int(np.sqrt(num_space_points)))
+        is_2d_plot = (num_space_points == Nx * Ny) and (Nx > 1 and Ny > 1)
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
@@ -687,7 +687,7 @@ class PODAnalyzer(BaseAnalyzer):
             return False
 
         print("\nChecking temporal coefficient pseudo-orthogonality ((1/Ns) * Psi.T @ Psi)...")
-        Ns = self.data["Ns"]
+        num_snapshots = self.data["Ns"]
         n_saved_coeffs = self.time_coefficients.shape[1]
 
         # Expected matrix based on POD theory for snapshot POD temporal eigenvectors
@@ -695,7 +695,7 @@ class PODAnalyzer(BaseAnalyzer):
         # self.time_coefficients = Psi_temp * sqrt(eigenvalues_temp * Ns)
         # So (1/Ns) * self.time_coefficients.T @ self.time_coefficients =
         # (1/Ns) * sqrt(L*Ns) * Psi_temp.T @ Psi_temp * sqrt(L*Ns) = L (diag(eigenvalues))
-        ortho_check_matrix = (1.0 / Ns) * (self.time_coefficients.T @ self.time_coefficients)
+        ortho_check_matrix = (1.0 / num_snapshots) * (self.time_coefficients.T @ self.time_coefficients)
         expected_diag_matrix = np.diag(self.eigenvalues[:n_saved_coeffs])
 
         diff_matrix = ortho_check_matrix - expected_diag_matrix
