@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import time
+import argparse
 
 import h5py
 import matplotlib.colors as colors
@@ -435,10 +436,18 @@ class SPODAnalyzer(BaseAnalyzer):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run SPOD analysis")
+    parser.add_argument("--config", help="Path to JSON/YAML configuration file", default=None)
+    args = parser.parse_args()
+
+    if args.config:
+        from configs import load_config
+        load_config(args.config)
+
     # --- Configuration ---
-    # data_file = "./data/jetLES_small.mat" # Updated data path
+    # data_file = "./data/jetLES_small.mat"  # Updated data path
     data_file = "./data/jetLES.mat"  # Path to your data file
-    # data_file = "./data/cavityPIV.mat" # Path to your data file
+    # data_file = "./data/cavityPIV.mat"  # Path to your data file
 
     # Default parameters
     nfft_param = 128  # FFT block size
