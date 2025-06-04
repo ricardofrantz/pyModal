@@ -61,7 +61,7 @@ pytest
 
 ### Parallel Execution
 
-Set the environment variable `OMP_NUM_THREADS` to control how many worker threads
+Set the environment variable `OMP_NUM_THREADS` to control how many threads
 are used for FFT and SPOD computations. If the variable is unset or invalid,
 all detected CPU cores are used by default:
 
