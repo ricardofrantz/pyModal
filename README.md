@@ -9,6 +9,9 @@ A **pure-Python** collection of simple scripts (no MPI, minimal dependencies) fo
 - **Bispectral Mode Decomposition (BSMD)**
   Extracts third-order phase-coupled spatial modes by diagonalizing an estimated bispectral density tensor, revealing the triadic interactions that drive nonlinear energy transfer.
   _Reference:_ [Nekkanti, Pickering, Schmidt & Colonius (2025)](https://arxiv.org/abs/2502.15091)
+  If FFT blocks are already present in `results_spod/`, BSMD automatically reuses
+  them (printing "Reusing cached FFT blocks...") and writes new output to
+  `results_bsmd/`.
 
 - **Space-Time Proper Orthogonal Decomposition (ST-POD)**
   Generalizes POD to a full space–time framework by solving eigenproblem of the space-time correlation tensor, capturing arbitrary nonstationary and transient dynamics over finite windows.
