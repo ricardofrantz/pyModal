@@ -3,14 +3,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 def get_num_workers():
-    """Return worker count from OMP_NUM_THREADS or cpu count."""
+    """Return worker count from ``OMP_NUM_THREADS`` or ``os.cpu_count()``."""
+    env = os.environ.get("OMP_NUM_THREADS")
     try:
-        env_val = int(os.environ.get("OMP_NUM_THREADS", "1"))
-    except ValueError:
-        env_val = 1
-    if env_val <= 0:
-        env_val = 1
-    return env_val
+        val = int(env) if env is not None else None
+    except (TypeError, ValueError):
+        val = None
+    if val is not None and val > 0:
+        return val
+    cpu = os.cpu_count() or 1
+    return cpu
 
 
 def parallel_map(func, iterable, workers=None):

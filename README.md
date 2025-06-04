@@ -49,8 +49,8 @@ pytest
 ### Parallel Execution
 
 Set the environment variable `OMP_NUM_THREADS` to control how many worker threads
-are used for FFT and SPOD computations. The default is `1`. To maximize
-performance you can set it to the number of available CPU cores:
+are used for FFT and SPOD computations. If the variable is unset or invalid,
+all detected CPU cores are used by default:
 
 ```bash
 # Linux
