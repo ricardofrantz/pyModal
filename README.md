@@ -23,6 +23,11 @@ pyModal is the only open-source package to combine POD + SPOD and BSMD in a sing
   If FFT blocks are already present in `results_spod/`, BSMD automatically reuses
   them (printing "Reusing cached FFT blocks...") and writes new output to
   `results_bsmd/`.
+- **Dynamic Mode Decomposition (DMD)**
+  Recovers eigenvalues and spatial modes of the best-fit linear operator
+  advancing the system in time.  Useful for extracting growth rates and
+  oscillatory structures.  The implementation here mirrors the exact DMD
+  algorithm from the `PyDMD` project.
 
 - **Space-Time Proper Orthogonal Decomposition (ST-POD)**
   Generalizes POD to a full space–time framework by solving an eigenproblem of
@@ -121,7 +126,7 @@ This section summarizes how the repository is organized and the mathematics impl
 
 ### Code layout
 
-- `spod.py`, `bmsd.py` and `pod.py` implement Spectral POD, Bispectral Mode Decomposition and standard POD respectively.
+- `spod.py`, `bmsd.py`, `pod.py` and `dmd.py` implement Spectral POD, Bispectral Mode Decomposition, standard POD and Dynamic Mode Decomposition respectively.
 - `utils.py` provides the `BaseAnalyzer` class with common routines for loading data, computing FFT blocks via `blocksfft`, and saving results.
 - `configs.py` contains global settings such as output directories, plotting defaults and the FFT backend.
 - The `fft/` folder houses backend-specific FFT helpers.
