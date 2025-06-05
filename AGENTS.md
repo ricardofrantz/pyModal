@@ -1,6 +1,6 @@
 # Repository guidelines for codex agent
 
-This file provides coding and contribution guidelines for the **modal-decomp** repository. Follow these directions whenever you modify or add files.
+This file provides coding and contribution guidelines for the **pyModal** repository. Follow these directions whenever you modify or add files.
 
 ## Project overview
 
