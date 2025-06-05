@@ -1,20 +1,31 @@
 # modal-decomp
 
-A **pure-Python** collection of simple scripts (no MPI, minimal dependencies) for extracting coherent flow structures via modal decompositions:
+A **pure-Python** collection of simple scripts (no MPI, minimal dependencies) for
+extracting coherent flow structures via several modal decompositions:
+
+- **Proper Orthogonal Decomposition (POD)**
+  Performs a weighted singular value decomposition of mean-subtracted snapshots
+  to recover energy-ranked spatial modes and their temporal coefficients.
 
 - **Spectral Proper Orthogonal Decomposition (SPOD)**
-  Solves the cross-spectral density eigenvalue problem to yield energy-ranked, harmonic spatial modes under the assumption of wide-sense stationarity.
+  Solves the cross-spectral density eigenvalue problem to yield energy-ranked,
+  harmonic spatial modes under the assumption of wide-sense stationarity.
   _Reference:_ [Towne, Schmidt & Colonius (2018)](https://arxiv.org/abs/1708.04393)
 
 - **Bispectral Mode Decomposition (BSMD)**
-  Extracts third-order phase-coupled spatial modes by diagonalizing an estimated bispectral density tensor, revealing the triadic interactions that drive nonlinear energy transfer.
+  Extracts third-order phase-coupled spatial modes by diagonalizing an estimated
+  bispectral density tensor, revealing the triadic interactions that drive
+  nonlinear energy transfer.
   _Reference:_ [Nekkanti, Pickering, Schmidt & Colonius (2025)](https://arxiv.org/abs/2502.15091)
   If FFT blocks are already present in `results_spod/`, BSMD automatically reuses
   them (printing "Reusing cached FFT blocks...") and writes new output to
   `results_bsmd/`.
 
 - **Space-Time Proper Orthogonal Decomposition (ST-POD)**
-  Generalizes POD to a full space–time framework by solving eigenproblem of the space-time correlation tensor, capturing arbitrary nonstationary and transient dynamics over finite windows.
+  Generalizes POD to a full space–time framework by solving an eigenproblem of
+  the space-time correlation tensor, capturing arbitrary nonstationary and
+  transient dynamics over finite windows.
+  Support for ST-POD is planned but **not yet implemented**.
   _Reference:_ [Yeung & Schmidt (2025)](https://arxiv.org/abs/2502.09746)
 
 ---
