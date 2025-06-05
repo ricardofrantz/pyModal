@@ -5,6 +5,47 @@ Shared FFT backend selection and wrapper utilities for modal decomposition and b
 from configs import FFT_BACKEND
 
 
+def accelerate_fft(x, axis=0):
+    """FFT using Apple's Accelerate framework via PyObjC or ctypes."""
+    import sys
+    import numpy as np
+    import ctypes
+    import ctypes.util
+
+    if sys.platform != 'darwin':
+        raise NotImplementedError('Accelerate FFT is only available on macOS.')
+
+    lib_path = ctypes.util.find_library('Accelerate')
+    if lib_path is None:
+        raise RuntimeError('Accelerate framework not found.')
+    accel = ctypes.cdll.LoadLibrary(lib_path)
+
+    class DSPDoubleSplitComplex(ctypes.Structure):
+        _fields_ = [
+            ('realp', ctypes.POINTER(ctypes.c_double)),
+            ('imagp', ctypes.POINTER(ctypes.c_double)),
+        ]
+
+    x_arr = np.asarray(x, dtype=np.complex128)
+    n = x_arr.shape[axis]
+    log2n = int(np.log2(n))
+    if 2**log2n != n:
+        raise ValueError('vDSP FFT requires power-of-two length.')
+
+    real = np.ascontiguousarray(np.real(x_arr), dtype=np.float64)
+    imag = np.ascontiguousarray(np.imag(x_arr), dtype=np.float64)
+    split = DSPDoubleSplitComplex(real.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                                  imag.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
+
+    accel.vDSP_create_fftsetupD.restype = ctypes.c_void_p
+    setup = accel.vDSP_create_fftsetupD(ctypes.c_uint(log2n), 2)
+    if not setup:
+        raise RuntimeError('Failed to create FFT setup.')
+    accel.vDSP_fft_zipD(ctypes.c_void_p(setup), ctypes.byref(split), 1, ctypes.c_uint(log2n), 1)
+    accel.vDSP_destroy_fftsetupD(ctypes.c_void_p(setup))
+    return real + 1j * imag
+
+
 def scipy_fft(x, axis=0):
     from scipy.fft import fft
 
@@ -52,29 +93,20 @@ def _pyfftw_fft_impl(x, axis=0):
     return fft_object()
 
 
-# --- Intel MKL Placeholder ---
-# Placeholder for Intel MKL.
-# Note: MKL is often integrated directly into NumPy/SciPy builds from distributions
-# like Anaconda or Intel's Python.
-# Check your NumPy/SciPy configuration (np.show_config()) to see if MKL is used.
-# If MKL is part of your NumPy/SciPy, then the 'numpy' or 'scipy' backends
-# are already effectively using MKL-optimized FFTs.
-#
-# def mkl_fft(x, axis=0):
-#     # This would typically require a specific library or a way to call MKL FFTs
-#     # directly, separate from how NumPy/SciPy use MKL internally. This is uncommon.
-#     # For example, if using a hypothetical 'pyMKLfft' library:
-#     # import pyMKLfft
-#     # return pyMKLfft.fft(x, axis=axis)
-#     raise NotImplementedError("Direct MKL backend not implemented. Check NumPy/SciPy for MKL integration.")
+def mkl_fft(x, axis=0):
+    """FFT via the Intel MKL :mod:`mkl_fft` library."""
+    from mkl_fft import fft as mkl_fft_func
+
+    return mkl_fft_func(x, axis=axis)
 
 FFT_BACKENDS = {
-    "scipy": scipy_fft,
-    "numpy": numpy_fft,
-    "tensorflow": tensorflow_fft,
-    "torch": torch_fft,
-    # "mkl": mkl_fft, # Uncomment if you establish a direct MKL FFT binding separate from NumPy/SciPy
-    # Add more here as needed!
+    'scipy': scipy_fft,
+    'numpy': numpy_fft,
+    'tensorflow': tensorflow_fft,
+    'torch': torch_fft,
+    'mkl': mkl_fft,
+    'accelerate': accelerate_fft,
+    # Additional backends are appended below when available
 }
 
 try:

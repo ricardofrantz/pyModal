@@ -50,9 +50,14 @@ PREPROCESS_DIR_DMD = "./preprocess_dmd"
 FIG_DPI = 300
 FIG_FORMAT = "png"  # or "pdf"
 
-# FFT backend: "scipy", "numpy", "tensorflow", "torch", "cv2" (OpenCV)
-# Should match the naming used in fft_benchmark.py
-FFT_BACKEND = "scipy"  # Default, options: "scipy", "numpy", "tensorflow", "torch", "cv2"
+# FFT backend selection. Options include:
+#  - 'scipy', 'numpy'
+#  - 'tensorflow', 'torch'
+#  - 'mkl' for Intel MKL via :mod:`mkl_fft`
+#  - 'accelerate' for macOS vDSP/Accelerate
+#  - 'cv2' (OpenCV)
+# The name must match the keys defined in :mod:`fft.fft_backends`.
+FFT_BACKEND = "scipy"
 
 # Matplotlib/LaTeX options
 USE_LATEX = False  # Set True to enable LaTeX rendering

@@ -75,12 +75,19 @@ provided by conda-forge:
 conda install numpy scipy matplotlib
 ```
 
+To enable the optional `'accelerate'` FFT backend install the PyObjC bindings:
+
+```bash
+pip install pyobjc-framework-Accelerate
+```
+
 For Intel workstations with the Intel compiler stack you can take advantage of
 Intel's optimized libraries:
 
 ```bash
 conda install intel-openmp
 conda install numpy[mkl]
+conda install mkl_fft  # optional direct MKL backend
 ```
 
 ## Running Tests
