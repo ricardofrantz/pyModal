@@ -132,6 +132,8 @@ This section summarizes how the repository is organized and the mathematics impl
 
 ### Mathematical overview
 
+**POD** performs a weighted singular value decomposition of the mean-subtracted snapshots. Depending on the dimensions it solves either the temporal or spatial covariance problem and projects the data to obtain modes and time coefficients.
+
 **SPOD** solves an eigenvalue problem for the cross–spectral density matrix. FFT blocks of the signal are computed with Welch's method (`blocksfft`). For each frequency bin `f_i` the weighted matrix
 \[M_i = X_i^H W X_i\]
 is diagonalized to obtain spatial modes and their energies.
@@ -139,8 +141,6 @@ is diagonalized to obtain spatial modes and their energies.
 **BSMD** analyzes triadic interactions. For a triad `(p1,p2,p3)` with `f_{p1}+f_{p2}=f_{p3}` it forms matrices `A` and `B` from cached FFT blocks and solves
 \[C = A^\dagger W B,\quad C a = \lambda a.\]
 The resulting eigenvectors reconstruct two coupled sets of spatial modes.
-
-**POD** performs a weighted singular value decomposition of the mean-subtracted snapshots. Depending on the dimensions it solves either the temporal or spatial covariance problem and projects the data to obtain modes and time coefficients.
 
 ### Caching
 
