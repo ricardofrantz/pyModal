@@ -10,15 +10,14 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg
 from scipy.linalg import eig
-from scipy.signal import find_peaks
-from scipy.signal import get_window
-from concurrent.futures import ThreadPoolExecutor
+from scipy.signal import find_peaks, get_window
 
 os.environ["OS_ACTIVITY_MODE"] = "disable"  # suppress macOS IMKClient logs
 """
@@ -34,15 +33,18 @@ CACHE_DIR = "./cache"
 RESULTS_DIR_SPOD = "./results_spod"
 RESULTS_DIR_POD = "./results_pod"
 RESULTS_DIR_BSMD = "./results_bsmd"
+RESULTS_DIR_DMD = "./results_dmd"
 
 FIGURES_DIR_SPOD = "./figs_spod"
 FIGURES_DIR_POD = "./figs_pod"
 FIGURES_DIR_BSMD = "./figs_bsmd"
+FIGURES_DIR_DMD = "./figs_dmd"
 
 # Optional preprocessing directories
 PREPROCESS_DIR_SPOD = "./preprocess_spod"
 PREPROCESS_DIR_POD = "./preprocess_pod"
 PREPROCESS_DIR_BSMD = "./preprocess_bsmd"
+PREPROCESS_DIR_DMD = "./preprocess_dmd"
 
 # Figure saving options
 FIG_DPI = 300
