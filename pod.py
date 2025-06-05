@@ -20,6 +20,8 @@ import time
 import h5py
 import matplotlib.pyplot as plt
 
+from parallel_utils import print_optimization_status
+
 # Third-party imports
 import numpy as np
 import scipy.linalg  # For eigh
@@ -75,7 +77,7 @@ class PODAnalyzer(BaseAnalyzer):
                       but are initialized with dummy values.
     """
 
-    def __init__(self, file_path, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=None, spatial_weight_type="auto", n_modes_save=10):
+    def __init__(self, file_path, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=None, spatial_weight_type="auto", n_modes_save=10, use_parallel=True):
         """
         Initialize the PODAnalyzer.
 
@@ -105,6 +107,7 @@ class PODAnalyzer(BaseAnalyzer):
             figures_dir=figures_dir,
             data_loader=data_loader,
             spatial_weight_type=spatial_weight_type,
+            use_parallel=use_parallel,
         )
 
         self.n_modes_save = n_modes_save
@@ -801,6 +804,8 @@ if __name__ == "__main__":
     parser.add_argument("--compute", action="store_true", help="Perform POD and save results")
     parser.add_argument("--plot", action="store_true", help="Generate default plots")
     args = parser.parse_args()
+
+    print_optimization_status()
 
     if args.config:
         from configs import load_config
