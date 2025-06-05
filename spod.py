@@ -27,12 +27,12 @@ from configs import (
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,  # For example in __main__ or if SPODAnalyzer needs it directly
+    get_num_threads,  # Utility to get number of available CPU threads
     load_jetles_data,  # For example in __main__
     load_mat_data,  # For example in __main__
     make_result_filename,
     print_summary,
     spod_function,  # Core SPOD routine for SPODAnalyzer
-    get_num_threads,  # Utility to get number of available CPU threads
 )
 
 
@@ -421,6 +421,11 @@ class SPODAnalyzer(BaseAnalyzer):
 
         if plot_modes_options:
             self.plot_modes(**plot_modes_options)
+        else:
+            self.plot_modes()
+        self.plot_time_coeffs()
+        self.plot_reconstruction_error(**(plot_reconstruction_options or {}))
+        self.plot_eig_complex_plane()
 
         print_summary("SPOD", self.results_dir, self.figures_dir)
 
@@ -539,7 +544,7 @@ class SPODAnalyzer(BaseAnalyzer):
 
         # Default selections
         if modes_to_plot is None:
-            modes_to_plot = [0]
+            modes_to_plot = list(range(min(10, self.modes.shape[2])))
         if freqs_to_plot is None:
             dominant_idx = np.argmax(self.eigenvalues[:, 0])
             freqs_to_plot = [dominant_idx]
@@ -560,7 +565,7 @@ class SPODAnalyzer(BaseAnalyzer):
         if x_coords.ndim == 1 and y_coords.ndim == 1:
             dx = x_coords.max() - x_coords.min()
             dy = y_coords.max() - y_coords.min()
-            aspect_ratio = dy / dx if dx > 0 and dy > 0 else "auto"
+            aspect_ratio = (dy / dx * 2) if dx > 0 and dy > 0 else "auto"
         else:
             aspect_ratio = "auto"
 
@@ -623,6 +628,100 @@ class SPODAnalyzer(BaseAnalyzer):
         plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close(fig)
         print(f"Cumulative energy plot saved to {plot_filename}")
+
+    def plot_time_coeffs(self, modes_to_plot=None, freq=None, n_blocks=None):
+        """Plot temporal coefficients for selected modes."""
+        if self.time_coefficients.size == 0:
+            print("No time coefficients to plot. Run perform_spod() first.")
+            return
+        if freq is None:
+            freq_idx = int(np.argmax(self.eigenvalues[:, 0]))
+        else:
+            freq_idx = int(np.argmin(np.abs(self.St - float(freq))))
+        coeffs = self.time_coefficients[freq_idx, :, :]
+        if n_blocks is not None:
+            coeffs = coeffs[:n_blocks, :]
+        if modes_to_plot is None:
+            modes_to_plot = list(range(min(4, coeffs.shape[1])))
+        fig, ax = plt.subplots()
+        for m in modes_to_plot:
+            if m < coeffs.shape[1]:
+                ax.plot(coeffs[:, m].real, label=f"Mode {m + 1} (real)")
+                ax.plot(coeffs[:, m].imag, "--", label=f"Mode {m + 1} (imag)")
+        ax.set_xlabel("Block index")
+        ax.set_ylabel("Coefficient")
+        ax.legend()
+        ax.set_title(f"SPOD Time Coefficients at St={self.St[freq_idx]:.4f}")
+        plot_filename = os.path.join(
+            self.figures_dir,
+            f"{self.data_root}_SPOD_timecoeffs_St{self.St[freq_idx]:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+        )
+        plt.savefig(plot_filename, dpi=FIG_DPI)
+        plt.close(fig)
+        print(f"Time coefficients plot saved to {plot_filename}")
+
+    def plot_reconstruction_error(self, st_target=None, n_modes_max=None):
+        """Plot reconstruction error of qhat as a function of modes used."""
+        if self.qhat.size == 0 or self.modes.size == 0:
+            print("No data to plot reconstruction error. Run perform_spod() first.")
+            return
+        if st_target is None:
+            freq_idx = int(np.argmax(self.eigenvalues[:, 0]))
+        else:
+            freq_idx = int(np.argmin(np.abs(self.St - float(st_target))))
+        qhat_f = self.qhat[freq_idx, :, :]
+        modes_f = self.modes[freq_idx, :, :]
+        n_modes_avail = modes_f.shape[1]
+        if n_modes_max is None:
+            n_modes_max = n_modes_avail
+        n_modes_max = min(n_modes_max, n_modes_avail)
+        W = np.diag(self.W.flatten()) if self.W.ndim == 1 else self.W
+        norm_orig = np.linalg.norm(qhat_f, "fro")
+        errors = []
+        mode_counts = range(1, n_modes_max + 1)
+        for k in mode_counts:
+            phi_k = modes_f[:, :k]
+            coeffs = phi_k.conj().T @ W @ qhat_f
+            qrec = phi_k @ coeffs
+            errors.append(np.linalg.norm(qhat_f - qrec, "fro") / norm_orig)
+        fig, ax = plt.subplots()
+        ax.plot(list(mode_counts), errors, "o-")
+        ax.set_yscale("log")
+        ax.set_xlabel("Number of SPOD Modes")
+        ax.set_ylabel("Relative Error")
+        ax.set_title(f"Reconstruction Error at St={self.St[freq_idx]:.4f}")
+        plot_filename = os.path.join(
+            self.figures_dir,
+            f"{self.data_root}_SPOD_reconstruction_error_St{self.St[freq_idx]:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+        )
+        plt.savefig(plot_filename, dpi=FIG_DPI)
+        plt.close(fig)
+        print(f"Reconstruction error plot saved to {plot_filename}")
+
+    def plot_eig_complex_plane(self, freq=None, n_modes=4):
+        """Plot modes in the complex plane for a given frequency."""
+        if self.modes.size == 0:
+            print("No modes to plot. Run perform_spod() first.")
+            return
+        if freq is None:
+            freq_idx = int(np.argmax(self.eigenvalues[:, 0]))
+        else:
+            freq_idx = int(np.argmin(np.abs(self.St - float(freq))))
+        modes = self.modes[freq_idx, :, :n_modes]
+        fig, ax = plt.subplots()
+        for i in range(modes.shape[1]):
+            ax.scatter(modes[:, i].real, modes[:, i].imag, s=10, alpha=0.7, label=f"Mode {i + 1}")
+        ax.set_xlabel("Real")
+        ax.set_ylabel("Imag")
+        ax.set_title(f"SPOD Modes Complex Plane St={self.St[freq_idx]:.4f}")
+        ax.legend()
+        plot_filename = os.path.join(
+            self.figures_dir,
+            f"{self.data_root}_SPOD_complex_St{self.St[freq_idx]:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+        )
+        plt.savefig(plot_filename, dpi=FIG_DPI)
+        plt.close(fig)
+        print(f"Complex plane plot saved to {plot_filename}")
 
 
 if __name__ == "__main__":
