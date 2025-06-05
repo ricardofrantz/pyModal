@@ -1,4 +1,4 @@
-# pyModal — lightweight modal decompositions in pure Python
+# pyModal — lightweight modal decompositions in Python
 
 pyModal is a collection of zero-MPI, minimal-dependency scripts for uncovering coherent structures in complex data.  It currently implements Proper Orthogonal Decomposition (POD), Spectral POD (SPOD), and the recently introduced Bispectral Mode Decomposition (BSMD), with full Space-Time POD (ST-POD) support on the roadmap.
 The focus is on clarity over boilerplate: every algorithm fits in a few hundred readable lines so you can study, tweak, or extend the maths without fighting a framework.
@@ -46,8 +46,8 @@ pyModal is the only open-source package to combine POD + SPOD and BSMD in a sing
 ## 💾 Getting the Code
 
 ```bash
-git clone https://github.com/ricardofrantz/modal-decomp.git
-cd modal-decomp
+git clone https://github.com/ricardofrantz/pyModal.git
+cd pyModal
 ```
 
 ## Installation
