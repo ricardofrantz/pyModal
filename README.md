@@ -64,6 +64,24 @@ pip install h5py matplotlib numpy scipy tqdm
 
 These scripts were tested on **Python 3.13** running on **Ubuntu 24.04** and **macOS**.
 
+### Performance notes
+
+On Apple silicon (M‑series) Macs we recommend installing Python via
+[Miniforge](https://github.com/conda-forge/miniforge) and using the packages
+provided by conda-forge:
+
+```bash
+conda install numpy scipy matplotlib
+```
+
+For Intel workstations with the Intel compiler stack you can take advantage of
+Intel's optimized libraries:
+
+```bash
+conda install intel-openmp
+conda install numpy[mkl]
+```
+
 ## Running Tests
 
 Install the dependencies and run the unit tests with:
@@ -74,16 +92,9 @@ pytest
 
 ### Parallel Execution
 
-Set the environment variable `OMP_NUM_THREADS` to control how many threads
-are used for FFT and SPOD computations. If the variable is unset or invalid,
-all detected CPU cores are used by default:
-
-```bash
-# Linux
-export OMP_NUM_THREADS=$(nproc)
-# macOS
-export OMP_NUM_THREADS=$(sysctl -n hw.ncpu)
-```
+FFT and matrix operations rely on NumPy's multithreaded BLAS libraries.
+The number of threads is taken from the `OMP_NUM_THREADS` environment
+variable when present; otherwise all available CPU cores are used.
 
 Check which optimizations are active by running:
 
@@ -137,7 +148,7 @@ Intermediate FFT blocks (`qhat`) are stored in HDF5 files whose names are genera
 
 ### Threads and performance
 
-FFT computation uses the backend specified in `configs.py` and honors the `OMP_NUM_THREADS` environment variable. The helper `get_num_threads()` returns the effective number of threads used.
+FFT computation uses the backend specified in `configs.py` and automatically leverages the multithreaded BLAS library shipped with NumPy. The helper `get_num_threads()` reports the number of threads (taken from `OMP_NUM_THREADS` when set).
 
 ### Extending the code
 

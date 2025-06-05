@@ -2,58 +2,28 @@
 """
 Simple Parallel Utilities for Modal Decomposition Analysis
 
-This module provides optimized implementations that work with or without OpenMP.
-It automatically falls back to vectorized NumPy operations when OpenMP is not available.
+This module provides optimized implementations using vectorized NumPy and
+high-performance BLAS routines. OpenMP and Numba are no longer required; the
+functions run on any standard Python installation.
 
 Author: Modal Decomposition Team
 """
 
 import numpy as np
-import os
 import multiprocessing
-import warnings
-from typing import Optional, Tuple, Union
 
-# Try to detect OpenMP availability
+# OpenMP support was removed. All routines rely on NumPy vectorization and the
+# underlying BLAS implementation.
 OPENMP_AVAILABLE = False
 PARALLEL_AVAILABLE = True
-
-try:
-    from numba import jit, prange, config
-    
-    # Try OpenMP first
-    try:
-        config.THREADING_LAYER = 'omp'
-        
-        @jit(nopython=True, parallel=True)
-        def _test_openmp():
-            result = 0.0
-            for i in prange(10):
-                result += i
-            return result
-        
-        _test_openmp()
-        OPENMP_AVAILABLE = True
-        print("🚀 OpenMP acceleration available")
-        
-    except:
-        # Fallback to threadsafe
-        config.THREADING_LAYER = 'threadsafe'
-        OPENMP_AVAILABLE = False
-        print("🔧 Using NumPy vectorization (OpenMP not available)")
-        
-except ImportError:
-    print("⚠️  Numba not available, using pure NumPy")
-    PARALLEL_AVAILABLE = False
 
 
 def calculate_polar_weights_optimized(x, y):
     """
     Calculate integration weights for 2D cylindrical grid.
     
-    This function automatically uses the best available implementation:
-    - OpenMP-accelerated if available
-    - Vectorized NumPy otherwise
+    This function uses a fully vectorized NumPy implementation that works on any
+    platform without special dependencies.
     
     Parameters:
     -----------
@@ -67,10 +37,7 @@ def calculate_polar_weights_optimized(x, y):
     np.ndarray
         Integration weights, shape (Nx * Ny, 1)
     """
-    if OPENMP_AVAILABLE:
-        return _calculate_weights_openmp(x, y)
-    else:
-        return _calculate_weights_numpy(x, y)
+    return _calculate_weights_numpy(x, y)
 
 
 def _calculate_weights_numpy(x, y):
@@ -119,61 +86,10 @@ def _calculate_weights_numpy(x, y):
     return W.reshape(-1, 1)
 
 
-if OPENMP_AVAILABLE:
-    @jit(nopython=True, parallel=True, cache=True)
-    def _calculate_weights_openmp(x, y):
-        """OpenMP-accelerated implementation of polar weights."""
-        Nx, Ny = len(x), len(y)
-        
-        # Calculate y-direction (r-direction) integration weights (Wy)
-        Wy = np.zeros(Ny)
-        
-        # First point (centerline)
-        if Ny > 1:
-            y_mid_right = (y[0] + y[1]) / 2
-            Wy[0] = np.pi * y_mid_right**2
-        else:
-            Wy[0] = np.pi * y[0] ** 2
-        
-        # Middle points - parallelized loop
-        for i in prange(1, Ny - 1):
-            y_mid_left = (y[i - 1] + y[i]) / 2
-            y_mid_right = (y[i] + y[i + 1]) / 2
-            Wy[i] = np.pi * (y_mid_right**2 - y_mid_left**2)
-        
-        # Last point
-        if Ny > 1:
-            y_mid_left = (y[-2] + y[-1]) / 2
-            Wy[Ny - 1] = np.pi * (y[-1] ** 2 - y_mid_left**2)
-        
-        # Calculate x-direction integration weights (Wx)
-        Wx = np.zeros(Nx)
-        
-        # First point
-        if Nx > 1:
-            Wx[0] = (x[1] - x[0]) / 2
-        else:
-            Wx[0] = 1.0
-        
-        # Middle points - parallelized loop
-        for i in prange(1, Nx - 1):
-            Wx[i] = (x[i + 1] - x[i - 1]) / 2
-        
-        # Last point
-        if Nx > 1:
-            Wx[Nx - 1] = (x[Nx - 1] - x[Nx - 2]) / 2
-        
-        # Combine weights
-        W = np.zeros(Nx * Ny)
-        for i in prange(Nx):
-            for j in prange(Ny):
-                W[i * Ny + j] = Wx[i] * Wy[j]
-        
-        return W.reshape(-1, 1)
-else:
-    def _calculate_weights_openmp(x, y):
-        """Fallback to NumPy if OpenMP not available."""
-        return _calculate_weights_numpy(x, y)
+# Placeholder function maintained for backward compatibility. It simply calls
+# the NumPy implementation as OpenMP acceleration has been removed.
+def _calculate_weights_openmp(x, y):
+    return _calculate_weights_numpy(x, y)
 
 
 def blocksfft_optimized(q, nfft, nblocks, novlap, blockwise_mean=False, normvar=False, 
@@ -393,7 +309,6 @@ def pod_computation_optimized(data_matrix, use_method='svd'):
 def get_optimization_info():
     """Return information about available optimizations."""
     info = {
-        'openmp_available': OPENMP_AVAILABLE,
         'parallel_available': PARALLEL_AVAILABLE,
         'cpu_count': multiprocessing.cpu_count(),
         'numpy_blas': 'Unknown'
@@ -429,14 +344,11 @@ def print_optimization_status():
     info = get_optimization_info()
     
     print("🔧 Optimization Status:")
-    print(f"   OpenMP Available: {info['openmp_available']}")
     print(f"   Parallel Available: {info['parallel_available']}")
     print(f"   CPU Cores: {info['cpu_count']}")
     print(f"   NumPy BLAS: {info['numpy_blas']}")
-    
-    if info['openmp_available']:
-        print("   🚀 Maximum performance mode")
-    elif info['parallel_available']:
+
+    if info['parallel_available']:
         print("   ⚡ High performance mode (vectorized)")
     else:
         print("   📊 Standard performance mode")

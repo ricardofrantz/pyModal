@@ -577,8 +577,6 @@ if __name__ == "__main__":
 
     threads_available = get_num_threads()
     print(f"Available CPU threads detected: {threads_available}")
-    if os.environ.get("OMP_NUM_THREADS") is None:
-        print(f"export OMP_NUM_THREADS={threads_available} for maximum performance.")
 
     print_optimization_status()
 
