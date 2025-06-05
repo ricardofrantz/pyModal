@@ -1,7 +1,10 @@
-# modal-decomp
+# pyModal — lightweight modal decompositions in pure Python
 
-A **pure-Python** collection of simple scripts (no MPI, minimal dependencies) for
-extracting coherent flow structures via several modal decompositions:
+pyModal is a collection of zero-MPI, minimal-dependency scripts for uncovering coherent structures in complex data.  It currently implements Proper Orthogonal Decomposition (POD), Spectral POD (SPOD), and the recently introduced Bispectral Mode Decomposition (BSMD), with full Space-Time POD (ST-POD) support on the roadmap.
+The focus is on clarity over boilerplate: every algorithm fits in a few hundred readable lines so you can study, tweak, or extend the maths without fighting a framework.
+
+- Why another modal toolbox?
+pyModal is the only open-source package to combine POD + SPOD and BSMD in a single, laptop-friendly codebase—something you won’t find in established libraries like PySPOD (SPOD only)  ￼, PyDMD (DMD variants), or modred (POD/BPOD/DMD).
 
 - **Proper Orthogonal Decomposition (POD)**
   Performs a weighted singular value decomposition of mean-subtracted snapshots
@@ -30,20 +33,13 @@ extracting coherent flow structures via several modal decompositions:
 
 ---
 
-## 🚀 Key Features
+## 🔑 Key Features
 
-- **Unified API**
-  One simple interface for the workflows.
-- **Lightweight & Readable**
-  Pure-Python scripts—easy to inspect, modify, and extend.
-- **No MPI Required**
-  Runs out of the box on a single machine.
-- **Flexible I/O**
-  Read/write HDF5, NetCDF, MATLAB `.mat`, or raw NumPy arrays.
-- **Modular Data Interface**
-  Plug in new data formats via `data_interface.py` with no changes to the analyzers.
-- **Built-in Visualization**
-  Quick plotting of mode shapes, power spectra, and bispectral maps.
+- **Pure-Python & portable** – runs out-of-the-box on CPython ≥3.9; no MPI or GPU prerequisites.
+- **Unified CLI workflow** – --prep, --compute, --plot stages for each method; caches FFT blocks automatically.
+- **Minimal install footprint** – only numpy, scipy, matplotlib, h5py, tqdm.
+- **Flexible I/O** – HDF5, NetCDF, MATLAB .mat, raw NumPy arrays.
+- **Built-in visualisation** - Quick mode shapes, spectra, and bispectral-energy maps straight from the CLI.
 
 ---
 
