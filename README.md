@@ -74,6 +74,12 @@ export OMP_NUM_THREADS=$(nproc)
 export OMP_NUM_THREADS=$(sysctl -n hw.ncpu)
 ```
 
+Check which optimizations are active by running:
+
+```bash
+python -m parallel_utils
+```
+
 ### Script Usage
 
 The analysis scripts (`pod.py`, `spod.py`, and `bmsd.py`) can now be executed in

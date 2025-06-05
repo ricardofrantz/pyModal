@@ -13,6 +13,17 @@ from data_interface import (
 )
 from fft.fft_backends import get_fft_func
 
+try:
+    from parallel_utils import (
+        calculate_polar_weights_optimized,
+        blocksfft_optimized,
+        spod_single_frequency_optimized,
+        pod_computation_optimized,
+        PARALLEL_AVAILABLE,
+    )
+except Exception:
+    PARALLEL_AVAILABLE = False
+
 def get_num_threads():
     """Return thread count from ``OMP_NUM_THREADS`` or ``os.cpu_count()``."""
     env = os.environ.get("OMP_NUM_THREADS")
@@ -148,8 +159,10 @@ def generate_dummy_data_like_jetles(
     return output_path
 
 
-def calculate_polar_weights(x, y):
+def calculate_polar_weights(x, y, use_parallel=True):
     """Calculate integration weights for a 2D cylindrical grid (x, r)."""
+    if use_parallel and PARALLEL_AVAILABLE:
+        return calculate_polar_weights_optimized(x, y)
     Nx, Ny = x.shape[0], y.shape[0]
 
     # Calculate y-direction (r-direction) integration weights (Wy)
@@ -217,9 +230,13 @@ def blocksfft(
     window_norm="power",
     window_type="hamming",
     n_threads=None,
+    use_parallel=True,
 ):
     """
     Compute blocked FFT using Welch's method for CSD estimation.
+
+    If ``use_parallel`` is True and optimized routines are available,
+    ``blocksfft_optimized`` from :mod:`parallel_utils` is used.
 
     Parameters:
     q (np.ndarray): Input data [time, space]
@@ -243,6 +260,18 @@ def blocksfft(
     - For correct SPOD scaling, ensure that dst (frequency resolution) is set as fs / nfft, where fs is the sampling frequency.
     ---
     """
+    if use_parallel and PARALLEL_AVAILABLE:
+        return blocksfft_optimized(
+            q,
+            nfft,
+            nblocks,
+            novlap,
+            blockwise_mean=blockwise_mean,
+            normvar=normvar,
+            window_norm=window_norm,
+            window_type=window_type,
+        )
+
     # Select window function
     if window_type == "sine":
         window = sine_window(nfft)
@@ -295,7 +324,7 @@ def auto_detect_weight_type(file_path):
     return di_auto_detect_weight_type(file_path)
 
 
-def spod_function(qhat, nblocks, dst, w, return_psi=False):
+def spod_function(qhat, nblocks, dst, w, return_psi=False, use_parallel=True):
     """
     Compute SPOD modes and eigenvalues for a single frequency.
     Args:
@@ -310,6 +339,15 @@ def spod_function(qhat, nblocks, dst, w, return_psi=False):
             lambda_tilde (np.ndarray): SPOD eigenvalues (energy) for this frequency [mode].
             psi (np.ndarray, optional): Time coefficients for this frequency [block, mode].
     """
+    if use_parallel and PARALLEL_AVAILABLE:
+        return spod_single_frequency_optimized(
+            qhat,
+            w,
+            nblocks,
+            dst,
+            return_psi=return_psi,
+        )
+
     # Normalize FFT coefficients to get fluctuation matrix X_f for this frequency f.
     x = qhat / np.sqrt(nblocks * dst)
     # Compute the weighted cross-spectral density (CSD) matrix M_f.
@@ -345,6 +383,7 @@ class BaseAnalyzer:
         data_loader=None,
         spatial_weight_type="auto",
         n_threads=None,
+        use_parallel=True,
     ):
         """Initialize the analyzer.
 
@@ -366,6 +405,7 @@ class BaseAnalyzer:
         # Set default data loader based on file type
         self.data_loader = data_loader or load_data
         self.n_threads = n_threads if n_threads is not None else get_num_threads()
+        self.use_parallel = use_parallel
 
         # Set default weight type
         if spatial_weight_type == "auto":
@@ -396,7 +436,9 @@ class BaseAnalyzer:
 
         # Calculate spatial weights
         if self.spatial_weight_type == "polar":
-            self.W = calculate_polar_weights(self.data["x"], self.data["y"])
+            self.W = calculate_polar_weights(
+                self.data["x"], self.data["y"], use_parallel=self.use_parallel
+            )
             print("Using polar (cylindrical) spatial weights.")
         else:
             self.W = calculate_uniform_weights(self.data["x"], self.data["y"])
@@ -430,6 +472,7 @@ class BaseAnalyzer:
             window_norm=getattr(self, "window_norm", "power"),
             window_type=getattr(self, "window_type", "hamming"),
             n_threads=self.n_threads,
+            use_parallel=self.use_parallel,
         )
         print("FFT computation complete.")
 

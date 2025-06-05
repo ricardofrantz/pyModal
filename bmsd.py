@@ -29,6 +29,8 @@ import time
 import h5py
 import matplotlib.pyplot as plt
 
+from parallel_utils import print_optimization_status
+
 # Third-party imports
 import numpy as np
 from scipy.sparse import linalg as splinalg
@@ -169,7 +171,7 @@ class BSMDAnalyzer(BaseAnalyzer):
                       and preprocessing.
     """
 
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_BSMD, figures_dir=FIGURES_DIR_BSMD, data_loader=None, spatial_weight_type="auto", use_static_triads=True, static_triads=ALL_TRIADS):
+    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_BSMD, figures_dir=FIGURES_DIR_BSMD, data_loader=None, spatial_weight_type="auto", use_static_triads=True, static_triads=ALL_TRIADS, use_parallel=True):
         """
         Initialize the BSMDAnalyzer.
 
@@ -195,7 +197,16 @@ class BSMDAnalyzer(BaseAnalyzer):
             static_triads (list of tuples, optional): List of predefined frequency index triads (p_k, p_l, p_k+p_l)
                                                      to analyze. Defaults to `ALL_TRIADS` from this module.
         """
-        super().__init__(file_path=file_path, nfft=nfft, overlap=overlap, results_dir=results_dir, figures_dir=figures_dir, data_loader=data_loader, spatial_weight_type=spatial_weight_type)
+        super().__init__(
+            file_path=file_path,
+            nfft=nfft,
+            overlap=overlap,
+            results_dir=results_dir,
+            figures_dir=figures_dir,
+            data_loader=data_loader,
+            spatial_weight_type=spatial_weight_type,
+            use_parallel=use_parallel,
+        )
         self.use_static_triads = use_static_triads
         self.static_triads_list = static_triads if use_static_triads else []
         self.analysis_type = "bsmd"
@@ -568,6 +579,8 @@ if __name__ == "__main__":
     print(f"Available CPU threads detected: {threads_available}")
     if os.environ.get("OMP_NUM_THREADS") is None:
         print(f"export OMP_NUM_THREADS={threads_available} for maximum performance.")
+
+    print_optimization_status()
 
     data_file = "./data/jetLES.mat"
 

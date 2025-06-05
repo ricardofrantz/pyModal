@@ -5,6 +5,8 @@ import json
 import os
 import time
 
+from parallel_utils import print_optimization_status
+
 import h5py
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
@@ -90,6 +92,7 @@ class SPODAnalyzer(BaseAnalyzer):
         data_loader=None,
         spatial_weight_type="auto",
         n_threads=None,
+        use_parallel=True,
     ):
         """
         Initializes the SPODAnalyzer instance.
@@ -127,6 +130,7 @@ class SPODAnalyzer(BaseAnalyzer):
             data_loader=data_loader,
             spatial_weight_type=spatial_weight_type,
             n_threads=n_threads,
+            use_parallel=use_parallel,
         )
 
         self._validate_inputs()
@@ -304,6 +308,7 @@ class SPODAnalyzer(BaseAnalyzer):
                 self.dst,
                 self.W,
                 return_psi=True,
+                use_parallel=self.use_parallel,
             )
             self.modes[i, :, :] = phi_freq
             self.eigenvalues[i, :] = lambda_freq
@@ -637,6 +642,8 @@ if __name__ == "__main__":
     print(f"Available CPU threads detected: {threads_available}")
     if os.environ.get("OMP_NUM_THREADS") is None:
         print(f"export OMP_NUM_THREADS={threads_available} for maximum performance.")
+
+    print_optimization_status()
 
     if args.config:
         from configs import load_config
