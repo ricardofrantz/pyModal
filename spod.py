@@ -232,15 +232,18 @@ class SPODAnalyzer(BaseAnalyzer):
 
         # Try loading cached FFT blocks from previous SPOD run
         if os.path.exists(cache_path):
-            with h5py.File(cache_path, "r") as f:
-                if "FFTBlocks" in f:
-                    qhat_cached = f["FFTBlocks"][:]
-                    if qhat_cached.shape[0] == self.nfft // 2 + 1:
-                        self.qhat = qhat_cached
-                        self.nblocks = qhat_cached.shape[2]
-                        self.qhat_cached = True
-                        print(f"Loaded cached FFT blocks from {cache_path}")
-                        return
+            try:
+                with h5py.File(cache_path, "r") as f:
+                    if "FFTBlocks" in f:
+                        qhat_cached = f["FFTBlocks"][:]
+                        if qhat_cached.shape[0] == self.nfft // 2 + 1:
+                            self.qhat = qhat_cached
+                            self.nblocks = qhat_cached.shape[2]
+                            self.qhat_cached = True
+                            print(f"Loaded cached FFT blocks from {cache_path}")
+                            return
+            except OSError as exc:
+                print(f"Failed to load cached FFT blocks ({exc}), recomputing.")
 
         # Otherwise compute and save to cache
         super().compute_fft_blocks()
@@ -525,7 +528,7 @@ class SPODAnalyzer(BaseAnalyzer):
         plt.close(fig)
         print(f"SPOD eigenvalue plot (v2) saved to {plot_filename}")
 
-    def plot_modes(self, freqs_to_plot=None, plot_n_modes: int | None = 10) -> None:
+    def plot_modes(self, freqs_to_plot=None, plot_n_modes: int | None = 10, modes_per_fig: int = 1) -> None:
         """Plot spatial modes for selected frequencies as individual figures."""
 
         if self.modes.size == 0 or self.St.size == 0:
@@ -560,31 +563,46 @@ class SPODAnalyzer(BaseAnalyzer):
 
         for f_idx in freq_indices:
             st_val = self.St[f_idx]
-            for m_idx in modes_to_plot:
-                if m_idx >= self.modes.shape[2]:
-                    continue
-                fig, ax = plt.subplots(figsize=(5, 4))
-                mode_real = self.modes[f_idx, :, m_idx].real
-                if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
-                    mode_2d = mode_real.reshape(Nx, Ny).T
-                    im = ax.contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
-                    ax.set_aspect(aspect_ratio)
-                    fig.colorbar(im, ax=ax, shrink=0.8, label=r"Re($\Phi$)")
-                    ax.set_xlabel("X")
-                    ax.set_ylabel("Y")
+            for start in range(0, n_modes, modes_per_fig):
+                end = min(start + modes_per_fig, n_modes)
+                ncols = end - start
+                if Nx * Ny == self.modes.shape[1] and Nx > 1 and Ny > 1:
+                    fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols * aspect_ratio, 4), squeeze=False)
                 else:
-                    ax.plot(mode_real)
-                    ax.set_xlabel("Spatial index")
-                    ax.set_ylabel("Amplitude")
-                ax.set_title(f"SPOD Mode {m_idx + 1} at St={st_val:.4f} [{var_name}]")
+                    fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 3), squeeze=False)
+                axes = axes.ravel()
+                for j, m_idx in enumerate(range(start, end)):
+                    if m_idx >= self.modes.shape[2]:
+                        continue
+                    ax = axes[j]
+                    mode_real = self.modes[f_idx, :, m_idx].real
+                    if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
+                        mode_2d = mode_real.reshape(Nx, Ny).T
+                        im = ax.contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
+                        ax.set_aspect(aspect_ratio)
+                        fig.colorbar(im, ax=ax, shrink=0.8, label=r"Re($\Phi$)")
+                        ax.set_xlabel("X")
+                        ax.set_ylabel("Y")
+                    else:
+                        ax.plot(mode_real)
+                        ax.set_xlabel("Spatial index")
+                        ax.set_ylabel("Amplitude")
+                    ax.set_title(f"SPOD Mode {m_idx + 1} at St={st_val:.4f} [{var_name}]")
+
                 fig.tight_layout()
-                plot_filename = os.path.join(
-                    self.figures_dir,
-                    f"{self.data_root}_SPOD_mode{m_idx + 1}_St{st_val:.4f}_{var_name}.png",
-                )
-                fig.savefig(plot_filename, dpi=FIG_DPI)
+                if modes_per_fig == 1 and ncols == 1:
+                    fname = os.path.join(
+                        self.figures_dir,
+                        f"{self.data_root}_SPOD_mode{start + 1}_St{st_val:.4f}_{var_name}.png",
+                    )
+                else:
+                    fname = os.path.join(
+                        self.figures_dir,
+                        f"{self.data_root}_SPOD_modes_{start + 1}_to_{end}_St{st_val:.4f}_{var_name}.png",
+                    )
+                fig.savefig(fname, dpi=FIG_DPI)
                 plt.close(fig)
-                print(f"SPOD mode {m_idx + 1} plot saved to {plot_filename}")
+                print(f"SPOD modes {start + 1}-{end} at St={st_val:.4f} saved to {fname}")
 
     def plot_cumulative_energy(self, freq_idx=None):
         """Plot cumulative energy captured by modes at a given frequency."""

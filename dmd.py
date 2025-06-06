@@ -135,7 +135,7 @@ class DMDAnalyzer(BaseAnalyzer):
         plt.close()
         print(f"Eigenvalue plot saved to {fname}")
 
-    def plot_modes(self, plot_n_modes: int | None = 10) -> None:
+    def plot_modes(self, plot_n_modes: int | None = 10, modes_per_fig: int = 1) -> None:
         """Plot spatial DMD modes as separate figures."""
         if self.modes.size == 0:
             print("No modes to plot.")
@@ -153,40 +153,49 @@ class DMDAnalyzer(BaseAnalyzer):
         aspect_ratio = get_aspect_ratio(self.data)
         var_name = self.data.get("metadata", {}).get("var_name", "q")
 
-        for i in range(n_modes):
-            fig, ax = plt.subplots(figsize=(5, 4))
-            mode = self.modes[:, i].real
+        for start in range(0, n_modes, modes_per_fig):
+            end = min(start + modes_per_fig, n_modes)
+            ncols = end - start
             if is_2d:
-                img = mode.reshape(nx, ny).T
-                extent = (
-                    x_coords.min(),
-                    x_coords.max(),
-                    y_coords.min(),
-                    y_coords.max(),
-                )
-                im = ax.imshow(
-                    img,
-                    origin="lower",
-                    extent=extent,
-                    cmap=CMAP_DIV,
-                    aspect=aspect_ratio,
-                )
-                fig.colorbar(im, ax=ax, label="Mode amplitude")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Y")
+                fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols * aspect_ratio, 4), squeeze=False)
             else:
-                ax.plot(mode)
-                ax.set_xlabel("Spatial index")
-                ax.set_ylabel("Amplitude")
-            ax.set_title(f"DMD Mode {i + 1} [{var_name}]")
+                fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 3), squeeze=False)
+            axes = axes.ravel()
+            for j, i in enumerate(range(start, end)):
+                ax = axes[j]
+                mode = self.modes[:, i].real
+                if is_2d:
+                    img = mode.reshape(nx, ny).T
+                    extent = (
+                        x_coords.min(),
+                        x_coords.max(),
+                        y_coords.min(),
+                        y_coords.max(),
+                    )
+                    im = ax.imshow(
+                        img,
+                        origin="lower",
+                        extent=extent,
+                        cmap=CMAP_DIV,
+                        aspect=aspect_ratio,
+                    )
+                    fig.colorbar(im, ax=ax, label="Mode amplitude")
+                    ax.set_xlabel("X")
+                    ax.set_ylabel("Y")
+                else:
+                    ax.plot(mode)
+                    ax.set_xlabel("Spatial index")
+                    ax.set_ylabel("Amplitude")
+                ax.set_title(f"DMD Mode {i + 1} [{var_name}]")
+
             fig.tight_layout()
             fname = os.path.join(
                 self.figures_dir,
-                f"{self.data_root}_dmd_mode{i + 1}_{var_name}.png",
+                f"{self.data_root}_dmd_modes_{start + 1}_to_{end}_{var_name}.png",
             )
             fig.savefig(fname, dpi=FIG_DPI)
             plt.close(fig)
-            print(f"Mode {i + 1} plot saved to {fname}")
+            print(f"DMD modes {start + 1}-{end} plot saved to {fname}")
 
     def plot_time_coefficients(self, n_coeffs_to_plot=2):
         """Plot DMD temporal coefficients."""

@@ -325,7 +325,7 @@ class PODAnalyzer(BaseAnalyzer):
         plt.close()
         print(f"POD eigenvalue plot saved to {plot_filename}")
 
-    def plot_modes(self, plot_n_modes: int | None = 10) -> None:
+    def plot_modes(self, plot_n_modes: int | None = 10, modes_per_fig: int = 1) -> None:
         """Plot the spatial POD modes.
 
         Visualizes the first `n_modes_to_plot` dominant spatial modes.
@@ -361,42 +361,52 @@ class PODAnalyzer(BaseAnalyzer):
 
         var_name = self.data.get("metadata", {}).get("var_name", "q")
 
-        for i in range(n_modes):
-            fig, ax = plt.subplots(figsize=(6, 5))
-            mode_to_plot = self.modes[:, i]
+        for start in range(0, n_modes, modes_per_fig):
+            end = min(start + modes_per_fig, n_modes)
+            ncols = end - start
             if is_2d_plot:
-                mode_reshaped = mode_to_plot.reshape(Nx, Ny)
-                extent = (
-                    x_coords.min(),
-                    x_coords.max(),
-                    y_coords.min(),
-                    y_coords.max(),
-                )
-                im = ax.imshow(
-                    mode_reshaped.T,
-                    aspect=aspect_ratio,
-                    origin="lower",
-                    extent=extent,
-                    cmap=CMAP_SEQ,
-                )
-                fig.colorbar(im, ax=ax, label="Mode amplitude")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Y")
+                fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols * aspect_ratio, 4), squeeze=False)
             else:
-                ax.plot(mode_to_plot)
-                ax.set_xlabel("Spatial index")
-                ax.set_ylabel("Mode amplitude")
+                fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 3), squeeze=False)
+            axes = axes.ravel()
 
-            energy = self.eigenvalues[i] / np.sum(self.eigenvalues) * 100
-            ax.set_title(f"POD Mode {i + 1} ({energy:.2f}% energy) [{var_name}]")
+            for j, i in enumerate(range(start, end)):
+                ax = axes[j]
+                mode_to_plot = self.modes[:, i]
+                if is_2d_plot:
+                    mode_reshaped = mode_to_plot.reshape(Nx, Ny)
+                    extent = (
+                        x_coords.min(),
+                        x_coords.max(),
+                        y_coords.min(),
+                        y_coords.max(),
+                    )
+                    im = ax.imshow(
+                        mode_reshaped.T,
+                        aspect=aspect_ratio,
+                        origin="lower",
+                        extent=extent,
+                        cmap=CMAP_SEQ,
+                    )
+                    fig.colorbar(im, ax=ax, label="Mode amplitude")
+                    ax.set_xlabel("X")
+                    ax.set_ylabel("Y")
+                else:
+                    ax.plot(mode_to_plot)
+                    ax.set_xlabel("Spatial index")
+                    ax.set_ylabel("Mode amplitude")
+
+                energy = self.eigenvalues[i] / np.sum(self.eigenvalues) * 100
+                ax.set_title(f"POD Mode {i + 1} ({energy:.2f}% energy) [{var_name}]")
+
             fig.tight_layout()
-            plot_filename = os.path.join(
+            fname = os.path.join(
                 self.figures_dir,
-                f"{self.data_root}_pod_mode{i + 1}_{var_name}.png",
+                f"{self.data_root}_pod_modes_{start + 1}_to_{end}_{var_name}.png",
             )
-            fig.savefig(plot_filename, dpi=FIG_DPI)
+            fig.savefig(fname, dpi=FIG_DPI)
             plt.close(fig)
-            print(f"POD mode {i + 1} plot saved to {plot_filename}")
+            print(f"POD modes {start + 1}-{end} plot saved to {fname}")
 
     def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None):
         """Plot the temporal coefficients for selected modes.
@@ -787,7 +797,7 @@ class PODAnalyzer(BaseAnalyzer):
 
         # Plotting
         self.plot_eigenvalues()
-        self.plot_modes(n_modes_to_plot=plot_n_modes_spatial)
+        self.plot_modes(plot_n_modes=plot_n_modes_spatial)
         self.plot_time_coefficients(n_coeffs_to_plot=plot_n_coeffs_time)
         self.plot_cumulative_energy()
         self.plot_reconstruction_error()
@@ -886,7 +896,10 @@ if __name__ == "__main__":
             print("No POD results to plot. Run with --compute first.")
         else:
             pod_analyzer.plot_eigenvalues()
-            pod_analyzer.plot_modes(n_modes_to_plot=n_modes_to_plot_spatial_main)
+            pod_analyzer.plot_modes(
+                plot_n_modes=n_modes_to_plot_spatial_main,
+                modes_per_fig=4,
+            )
             pod_analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
             pod_analyzer.plot_cumulative_energy()
             pod_analyzer.plot_reconstruction_error()

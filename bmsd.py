@@ -35,6 +35,7 @@ from scipy.sparse import linalg as splinalg
 from tqdm import tqdm
 
 from configs import (
+    CMAP_SEQ,
     FIGURES_DIR_BSMD,
     RESULTS_DIR_BSMD,
     RESULTS_DIR_SPOD,
