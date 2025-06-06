@@ -5,8 +5,6 @@ import json
 import os
 import time
 
-from parallel_utils import print_optimization_status
-
 import h5py
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
@@ -24,11 +22,13 @@ from configs import (
     WINDOW_NORM,
     WINDOW_TYPE,
 )
+from parallel_utils import print_optimization_status
 
 # Local application/library specific imports
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,  # For example in __main__ or if SPODAnalyzer needs it directly
+    compute_aspect_ratio,
     get_num_threads,  # Utility to get number of available CPU threads
     load_jetles_data,  # For example in __main__
     load_mat_data,  # For example in __main__
@@ -567,12 +567,7 @@ class SPODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
-        if x_coords.ndim == 1 and y_coords.ndim == 1:
-            dx = x_coords.max() - x_coords.min()
-            dy = y_coords.max() - y_coords.min()
-            aspect_ratio = (dy / dx * 2) if dx > 0 and dy > 0 else "auto"
-        else:
-            aspect_ratio = "auto"
+        aspect_ratio = compute_aspect_ratio(x_coords, y_coords)
 
         for f_idx in freq_indices:
             st_val = self.St[f_idx]

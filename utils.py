@@ -4,25 +4,25 @@ Common utilities for modal decomposition methods.
 
 All imports are centralized here to keep the code clean and consistent.
 """
+
 from configs import *
-from data_interface import (
-    load_data as di_load_data,
-    load_mat_data as di_load_mat_data,
-    load_jetles_data as di_load_jetles_data,
-    auto_detect_weight_type as di_auto_detect_weight_type
-)
+from data_interface import auto_detect_weight_type as di_auto_detect_weight_type
+from data_interface import load_data as di_load_data
+from data_interface import load_jetles_data as di_load_jetles_data
+from data_interface import load_mat_data as di_load_mat_data
 from fft.fft_backends import get_fft_func
 
 try:
     from parallel_utils import (
-        calculate_polar_weights_optimized,
-        blocksfft_optimized,
-        spod_single_frequency_optimized,
-        pod_computation_optimized,
         PARALLEL_AVAILABLE,
+        blocksfft_optimized,
+        calculate_polar_weights_optimized,
+        pod_computation_optimized,
+        spod_single_frequency_optimized,
     )
 except Exception:
     PARALLEL_AVAILABLE = False
+
 
 def get_num_threads():
     """Return thread count from ``OMP_NUM_THREADS`` or ``os.cpu_count()``."""
@@ -72,12 +72,29 @@ def print_summary(analysis: str, results_dir: str, figures_dir: str) -> None:
     print(f"📊 Figures: {figures_dir}")
 
 
+def compute_aspect_ratio(x_coords, y_coords):
+    """Return ``dy/dx`` if coordinates are 1D vectors, else ``'auto'``."""
+    if hasattr(x_coords, "ndim") and hasattr(y_coords, "ndim"):
+        if x_coords.ndim == 1 and y_coords.ndim == 1:
+            dx = float(x_coords.max() - x_coords.min())
+            dy = float(y_coords.max() - y_coords.min())
+            if dx > 0 and dy > 0:
+                return dy / dx
+    return "auto"
+
+
 def load_jetles_data(file_path):
     return di_load_jetles_data(file_path)
+
+
 def load_mat_data(file_path):
     return di_load_mat_data(file_path)
+
+
 def load_data(file_path):
     return di_load_data(file_path)
+
+
 def generate_dummy_data_like_jetles(
     output_path: str,
     Ns: int = 100,
@@ -436,9 +453,7 @@ class BaseAnalyzer:
 
         # Calculate spatial weights
         if self.spatial_weight_type == "polar":
-            self.W = calculate_polar_weights(
-                self.data["x"], self.data["y"], use_parallel=self.use_parallel
-            )
+            self.W = calculate_polar_weights(self.data["x"], self.data["y"], use_parallel=self.use_parallel)
             print("Using polar (cylindrical) spatial weights.")
         else:
             self.W = calculate_uniform_weights(self.data["x"], self.data["y"])
@@ -450,18 +465,14 @@ class BaseAnalyzer:
 
         print(f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points")
         if self.nfft > 1:
-            print(
-                f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]"
-            )
+            print(f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]")
 
     def compute_fft_blocks(self):
         """Compute blocked FFT using Welch's method."""
         if "q" not in self.data:
             raise ValueError("Data not loaded. Call load_and_preprocess() first.")
 
-        print(
-            f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend..."
-        )
+        print(f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend...")
         self.qhat = blocksfft(
             self.data["q"],
             self.nfft,

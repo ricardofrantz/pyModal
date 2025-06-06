@@ -29,8 +29,6 @@ import time
 import h5py
 import matplotlib.pyplot as plt
 
-from parallel_utils import print_optimization_status
-
 # Third-party imports
 import numpy as np
 from scipy.sparse import linalg as splinalg
@@ -41,17 +39,19 @@ from configs import (
     RESULTS_DIR_BSMD,
     RESULTS_DIR_SPOD,
 )
+from parallel_utils import print_optimization_status
 
 # Local application/library specific imports
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,  # If used in __main__
     blocksfft,  # BSMD method description mentions qhat from Welch's method
+    compute_aspect_ratio,
+    get_num_threads,  # For detecting available CPU threads
     load_jetles_data,  # If used in __main__
     load_mat_data,  # If used in __main__
     make_result_filename,  # For saving results
     print_summary,
-    get_num_threads,  # For detecting available CPU threads
 )
 
 
@@ -435,9 +435,7 @@ class BSMDAnalyzer(BaseAnalyzer):
             print("Error: Frequency/Strouhal information not available. Cannot map triads.")
             return
 
-        for i, (st_alpha_target, st_beta_target, st_gamma_target) in enumerate(
-            tqdm(self.static_triads_list, desc="BSMD Triads")
-        ):
+        for i, (st_alpha_target, st_beta_target, st_gamma_target) in enumerate(tqdm(self.static_triads_list, desc="BSMD Triads")):
             idx_alpha = find_closest_freq_idx(self.St, st_alpha_target)
             idx_beta = find_closest_freq_idx(self.St, st_beta_target)
             idx_gamma = find_closest_freq_idx(self.St, st_gamma_target)
@@ -543,6 +541,65 @@ class BSMDAnalyzer(BaseAnalyzer):
             f.create_dataset("W", data=self.W)
         print(f"Results saved to {results_path}")
 
+    def plot_modes(self, triad_indices=None, top_n=3):
+        """Plot spatial BSMD modes for selected triads."""
+        if self.modes1.size == 0 or self.modes2.size == 0:
+            print("No BSMD modes to plot. Run perform_bsmd() first.")
+            return
+
+        if triad_indices is None:
+            lambdas = np.abs(self.eigenvalues)
+            triad_indices = list(np.argsort(lambdas)[-top_n:][::-1])
+
+        nx = self.data.get("Nx", int(np.sqrt(self.modes1.shape[1])))
+        ny = self.data.get("Ny", int(np.sqrt(self.modes1.shape[1])))
+        x_coords = self.data.get("x", np.arange(nx))
+        y_coords = self.data.get("y", np.arange(ny))
+        aspect_ratio = compute_aspect_ratio(x_coords, y_coords)
+        extent = (
+            x_coords.min(),
+            x_coords.max(),
+            y_coords.min(),
+            y_coords.max(),
+        )
+
+        fig, axes = plt.subplots(len(triad_indices), 2, figsize=(10, 4 * len(triad_indices)))
+        axes = np.atleast_2d(axes)
+
+        for row, idx in enumerate(triad_indices):
+            mode1 = self.modes1[idx, :].real.reshape(nx, ny).T
+            mode2 = self.modes2[idx, :].real.reshape(nx, ny).T
+            triad = self.triads[idx]
+            im1 = axes[row, 0].imshow(
+                mode1,
+                origin="lower",
+                extent=extent,
+                cmap=CMAP_SEQ,
+                aspect=aspect_ratio,
+            )
+            axes[row, 0].set_title(f"Triad {tuple(triad)} Phi1")
+            axes[row, 0].set_xlabel("X")
+            axes[row, 0].set_ylabel("Y")
+            fig.colorbar(im1, ax=axes[row, 0], shrink=0.8)
+
+            im2 = axes[row, 1].imshow(
+                mode2,
+                origin="lower",
+                extent=extent,
+                cmap=CMAP_SEQ,
+                aspect=aspect_ratio,
+            )
+            axes[row, 1].set_title(f"Triad {tuple(triad)} Phi2")
+            axes[row, 1].set_xlabel("X")
+            axes[row, 1].set_ylabel("Y")
+            fig.colorbar(im2, ax=axes[row, 1], shrink=0.8)
+
+        fig.tight_layout()
+        fname = os.path.join(self.figures_dir, f"{self.data_root}_BSMD_modes.png")
+        plt.savefig(fname)
+        plt.close(fig)
+        print(f"BSMD mode plot saved to {fname}")
+
     # Execute the full BSMD pipeline.
     def run_analysis(self):
         """
@@ -628,6 +685,7 @@ if __name__ == "__main__":
             plt.tight_layout()
             plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
             plt.close()
+            analyzer.plot_modes()
 
     if run_all:
         print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
