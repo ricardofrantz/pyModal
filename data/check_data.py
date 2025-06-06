@@ -31,42 +31,46 @@ def plot_snapshots(data: dict, file_path: str) -> None:
     nx = data.get("Nx", 1)
     ny = data.get("Ny", 1)
     nz = data.get("Nz", 1)
-    x = data.get("x", np.arange(nx))
-    y = data.get("y", np.arange(ny))
+    x = data["x"]
+    y = data["y"]
 
-    indices = [
-        0,
-        int(0.25 * (ns - 1)),
-        int(0.5 * (ns - 1)),
-        int(0.75 * (ns - 1)),
-    ]
+    # Use first, last, and two middle snapshots (unique, sorted)
+    indices = sorted(set([0, ns // 3, ns // 2, ns - 1]))
 
     is_2d = nx > 1 and ny > 1 and q.shape[1] == nx * ny * nz
 
-    plt.figure(figsize=(12, 3))
+    nplots = len(indices)
+    # Improve aspect ratio for 2D plots
+    if is_2d:
+        aspect = nx / ny if ny > 0 else 1
+        aspect = max(0.5, min(aspect, 2.0))  # Clamp to reasonable bounds
+        plt.figure(figsize=(3 * nplots * aspect, 3))
+    else:
+        plt.figure(figsize=(3 * nplots, 3))
+    var_name = data.get('metadata', {}).get('var_name', 'q')
     for i, idx in enumerate(indices):
-        plt.subplot(1, 4, i + 1)
+        plt.subplot(1, nplots, i + 1)
         snap = q[idx]
         if is_2d:
             snap = snap.reshape(nx, ny).T
-            extent = (
-                (
-                    x.min(),
-                    x.max(),
-                    y.min(),
-                    y.max(),
-                )
-                if x.ndim == 1 and y.ndim == 1
-                else None
+            use_extent = (
+                x.ndim == 1 and y.ndim == 1 and
+                np.all(np.diff(x) > 0) and np.all(np.diff(y) > 0)
             )
-            plt.imshow(snap, origin="lower", extent=extent, cmap=CMAP_SEQ, aspect="auto")
-            plt.xlabel("x")
-            plt.ylabel("y")
+            if use_extent:
+                extent = (x.min(), x.max(), y.min(), y.max())
+                plt.imshow(snap, origin="lower", extent=extent, cmap=CMAP_SEQ, aspect="auto")
+                plt.xlabel("x")
+                plt.ylabel("y")
+            else:
+                plt.imshow(snap, origin="lower", cmap=CMAP_SEQ, aspect="auto")
+                plt.xlabel("x index")
+                plt.ylabel("y index")
         else:
             plt.plot(snap)
             plt.xlabel("index")
             plt.ylabel("value")
-        plt.title(f"Snapshot {idx}")
+        plt.title(f"Ns={idx} [{var_name}]")
     plt.tight_layout()
 
     root = os.path.splitext(os.path.basename(file_path))[0]

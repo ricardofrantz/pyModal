@@ -53,16 +53,26 @@ class MATDataLoader(DataLoader):
         """Check if file is a .mat file."""
         return file_path.lower().endswith('.mat')
     
-    def load(self, file_path: str) -> Dict[str, Any]:
-        """Load data from .mat file with flexible variable detection."""
+    def load(self, file_path: str, preview_ns: int = None) -> Dict[str, Any]:
+        """Load data from .mat file with flexible variable detection. Optionally, only load first preview_ns snapshots."""
         print(f"📂 Loading .mat data from {file_path}")
         
         with h5py.File(file_path, "r") as fread:
             # Try common variable names for the main field
             q = None
+            var_name = None
             for var in ["p", "u", "v", "data", "field"]:
                 if var in fread:
-                    q = fread[var][:]
+                    var_name = var
+                    if preview_ns is not None:
+                        # Only load first preview_ns along each axis (for preview mode)
+                        shape = fread[var].shape
+                        time_axis = int(np.argmax(shape))
+                        index = [slice(None)] * len(shape)
+                        index[time_axis] = slice(0, preview_ns)
+                        q = fread[var][tuple(index)]
+                    else:
+                        q = fread[var][:]
                     print(f"   Found data variable: '{var}'")
                     break
             
@@ -70,6 +80,10 @@ class MATDataLoader(DataLoader):
                 # List available variables
                 available_vars = list(fread.keys())
                 raise KeyError(f"No recognized data variable in file. Available: {available_vars}")
+            
+            # Optionally cast to float32 to save memory
+            if q.dtype == np.float64:
+                q = q.astype(np.float32, copy=False)
             
             # Load coordinates
             x = fread["x"][:] if "x" in fread else np.arange(q.shape[1])
@@ -89,15 +103,41 @@ class MATDataLoader(DataLoader):
         y_vec = y[0, :] if y.ndim == 2 else y
         z_vec = z[0, 0, :] if (z is not None and z.ndim == 3) else z
         
-        Nx, Ny = len(x_vec), len(y_vec)
+        # --- Simplified: largest axis is time, others are space ---
+        q_shape = q.shape
+        time_axis = np.argmax(q_shape)
+        Ns = q_shape[time_axis]
+        if time_axis != 0:
+            q = np.moveaxis(q, time_axis, 0)
+        spatial_shapes = q.shape[1:]
+        coords = [x_vec, y_vec]
+        if z_vec is not None:
+            coords.append(z_vec)
+        # Assign coordinate vectors by order, fallback to np.arange if length mismatches
+        for i, s in enumerate(spatial_shapes):
+            if i < len(coords):
+                if len(coords[i]) != s:
+                    coords[i] = np.arange(s)
+            else:
+                coords.append(np.arange(s))
+        x_vec = coords[0] if len(coords) > 0 else np.arange(q.shape[1] if len(q.shape) > 1 else 1)
+        y_vec = coords[1] if len(coords) > 1 else np.arange(q.shape[2] if len(q.shape) > 2 else 1)
+        z_vec = coords[2] if len(coords) > 2 else None
+        Nx = len(x_vec)
+        Ny = len(y_vec)
         Nz = len(z_vec) if z_vec is not None else 1
-        
-        # Reshape data to standard format: (Ns, Nspace)
-        q_reshaped = self._reshape_to_standard_format(q, Nx, Ny, Nz)
+        # Only reshape if needed
+        if q.ndim == 2:
+            if q.shape == (Ns, Nx * Ny * Nz):
+                q_reshaped = q
+            elif q.shape == (Nx * Ny * Nz, Ns):
+                q_reshaped = q.T
+            else:
+                q_reshaped = q.reshape(Ns, Nx * Ny * Nz)
+        else:
+            q_reshaped = q.reshape(Ns, Nx * Ny * Nz)
         Ns = q_reshaped.shape[0]
-        
         print(f"   Processed shape: q={q_reshaped.shape}, Nx={Nx}, Ny={Ny}, Nz={Nz}, Ns={Ns}")
-        
         return {
             'q': q_reshaped,
             'x': x_vec,
@@ -111,7 +151,8 @@ class MATDataLoader(DataLoader):
             'metadata': {
                 'format': 'mat',
                 'original_shape': q.shape,
-                'file_path': file_path
+                'file_path': file_path,
+                'var_name': var_name
             }
         }
     
