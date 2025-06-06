@@ -28,7 +28,7 @@ from parallel_utils import print_optimization_status
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,  # For example in __main__ or if SPODAnalyzer needs it directly
-    get_aspect_ratio,
+    get_fig_aspect_ratio,
     get_num_threads,  # Utility to get number of available CPU threads
     load_jetles_data,  # For example in __main__
     load_mat_data,  # For example in __main__
@@ -558,7 +558,7 @@ class SPODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
-        aspect_ratio = get_aspect_ratio(self.data)
+        fig_aspect = get_fig_aspect_ratio(self.data)
         var_name = self.data.get("metadata", {}).get("var_name", "q")
 
         for f_idx in freq_indices:
@@ -567,7 +567,12 @@ class SPODAnalyzer(BaseAnalyzer):
                 end = min(start + modes_per_fig, n_modes)
                 ncols = end - start
                 if Nx * Ny == self.modes.shape[1] and Nx > 1 and Ny > 1:
-                    fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols * aspect_ratio, 4), squeeze=False)
+                    fig, axes = plt.subplots(
+                        1,
+                        ncols,
+                        figsize=(4 * ncols * fig_aspect, 4),
+                        squeeze=False,
+                    )
                 else:
                     fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 3), squeeze=False)
                 axes = axes.ravel()
@@ -579,7 +584,7 @@ class SPODAnalyzer(BaseAnalyzer):
                     if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
                         mode_2d = mode_real.reshape(Nx, Ny).T
                         im = ax.contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
-                        ax.set_aspect(aspect_ratio)
+                        ax.set_aspect("auto")
                         fig.colorbar(im, ax=ax, shrink=0.8, label=r"Re($\Phi$)")
                         ax.set_xlabel("X")
                         ax.set_ylabel("Y")

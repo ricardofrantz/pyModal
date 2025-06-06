@@ -26,7 +26,7 @@ from configs import (
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,
-    get_aspect_ratio,
+    get_fig_aspect_ratio,
     load_jetles_data,
     load_mat_data,
     make_result_filename,
@@ -150,14 +150,19 @@ class DMDAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(nx))
         y_coords = self.data.get("y", np.arange(ny))
         is_2d = self.modes.shape[0] == nx * ny and nx > 1 and ny > 1
-        aspect_ratio = get_aspect_ratio(self.data)
+        fig_aspect = get_fig_aspect_ratio(self.data)
         var_name = self.data.get("metadata", {}).get("var_name", "q")
 
         for start in range(0, n_modes, modes_per_fig):
             end = min(start + modes_per_fig, n_modes)
             ncols = end - start
             if is_2d:
-                fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols * aspect_ratio, 4), squeeze=False)
+                fig, axes = plt.subplots(
+                    1,
+                    ncols,
+                    figsize=(4 * ncols * fig_aspect, 4),
+                    squeeze=False,
+                )
             else:
                 fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 3), squeeze=False)
             axes = axes.ravel()
@@ -177,7 +182,7 @@ class DMDAnalyzer(BaseAnalyzer):
                         origin="lower",
                         extent=extent,
                         cmap=CMAP_DIV,
-                        aspect=aspect_ratio,
+                        aspect="auto",
                     )
                     fig.colorbar(im, ax=ax, label="Mode amplitude")
                     ax.set_xlabel("X")

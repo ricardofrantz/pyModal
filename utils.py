@@ -90,6 +90,17 @@ def get_aspect_ratio(data: dict) -> float | str:
     return compute_aspect_ratio(x, y)
 
 
+def get_fig_aspect_ratio(data: dict, clamp_low: float = 0.5, clamp_high: float = 2.0) -> float:
+    """Return ``Nx/Ny`` ratio clamped for figure sizing."""
+    nx = int(data.get("Nx", 1))
+    ny = int(data.get("Ny", 1))
+    if ny <= 0:
+        aspect = 1.0
+    else:
+        aspect = nx / ny
+    return max(clamp_low, min(aspect, clamp_high))
+
+
 def load_jetles_data(file_path):
     return di_load_jetles_data(file_path)
 

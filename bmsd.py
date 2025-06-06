@@ -47,7 +47,7 @@ from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,  # If used in __main__
     blocksfft,  # BSMD method description mentions qhat from Welch's method
-    get_aspect_ratio,
+    get_fig_aspect_ratio,
     get_num_threads,  # For detecting available CPU threads
     load_jetles_data,  # If used in __main__
     load_mat_data,  # If used in __main__
@@ -570,7 +570,7 @@ class BSMDAnalyzer(BaseAnalyzer):
         ny = self.data.get("Ny", int(np.sqrt(self.modes1.shape[1])))
         x_coords = self.data.get("x", np.arange(nx))
         y_coords = self.data.get("y", np.arange(ny))
-        aspect_ratio = get_aspect_ratio(self.data)
+        fig_aspect = get_fig_aspect_ratio(self.data)
         var_name = self.data.get("metadata", {}).get("var_name", "q")
         extent = (
             x_coords.min(),
@@ -583,13 +583,17 @@ class BSMDAnalyzer(BaseAnalyzer):
             mode1 = self.modes1[idx, :].real.reshape(nx, ny).T
             mode2 = self.modes2[idx, :].real.reshape(nx, ny).T
             triad = self.triads[idx]
-            fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+            fig, axes = plt.subplots(
+                1,
+                2,
+                figsize=(8 * fig_aspect, 4),
+            )
             im1 = axes[0].imshow(
                 mode1,
                 origin="lower",
                 extent=extent,
                 cmap=CMAP_SEQ,
-                aspect=aspect_ratio,
+                aspect="auto",
             )
             axes[0].set_title(f"Triad {tuple(triad)} Phi1 [{var_name}]")
             axes[0].set_xlabel("X")
@@ -601,7 +605,7 @@ class BSMDAnalyzer(BaseAnalyzer):
                 origin="lower",
                 extent=extent,
                 cmap=CMAP_SEQ,
-                aspect=aspect_ratio,
+                aspect="auto",
             )
             axes[1].set_title(f"Triad {tuple(triad)} Phi2 [{var_name}]")
             axes[1].set_xlabel("X")
