@@ -449,9 +449,9 @@ class BSMDAnalyzer(BaseAnalyzer):
                 continue
 
             # Extract FFT data for the triad frequencies
-            Q_alpha = self.qhat[idx_alpha, :, :]  # Shape (Nspace, Nblocks)
-            Q_beta = self.qhat[idx_beta, :, :]  # Shape (Nspace, Nblocks)
-            Q_gamma = self.qhat[idx_gamma, :, :]  # Shape (Nspace, Nblocks)
+            Q_alpha = self.qhat[idx_alpha, :, :]  # (Nspace, Nblocks)
+            Q_beta = self.qhat[idx_beta, :, :]  # (Nspace, Nblocks)
+            Q_gamma = self.qhat[idx_gamma, :, :]  # (Nspace, Nblocks)
 
             # Compute bispectral tensor B_alpha_beta (Schmidt decomposition)
             # B_ab = Q_alpha @ Q_beta.conj().T / Nblocks (example formulation)
@@ -471,11 +471,23 @@ class BSMDAnalyzer(BaseAnalyzer):
                 self.modes2[i, :] = np.nan
                 continue
 
-            target_matrix = (Q_alpha @ Q_beta.conj().T) / Q_alpha.shape[1]  # Nspace x Nspace
+            nblocks = Q_alpha.shape[1]
+
+            def matvec(v):
+                return Q_alpha @ (Q_beta.conj().T @ v) / nblocks
+
+            def rmatvec(v):
+                return Q_beta @ (Q_alpha.conj().T @ v) / nblocks
+
+            op = splinalg.LinearOperator(
+                shape=(Q_alpha.shape[0], Q_alpha.shape[0]),
+                matvec=matvec,
+                rmatvec=rmatvec,
+                dtype=np.complex128,
+            )
 
             try:
-                # Compute only the leading singular triplet for efficiency
-                u, s, vh = splinalg.svds(target_matrix, k=1)
+                u, s, vh = splinalg.svds(op, k=1)
                 self.modes1[i, :] = u[:, 0]
                 self.modes2[i, :] = vh[0, :].conj()
                 self.eigenvalues[i] = s[0]
