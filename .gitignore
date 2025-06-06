@@ -1,14 +1,4 @@
 __pycache__
 **/__pycache__
-cache
-preprocess
 .ruff_cache
-results_spod
-results_pod
-results_bsmd
-figs_spod
-figs_pod
-figs_bsmd
-preprocess_spod
-preprocess_pod
-preprocess_bsmd
+**/results_*
