@@ -2,7 +2,6 @@
 """Quick dataset check by plotting representative snapshots."""
 
 import os
-import subprocess
 import sys
 
 import matplotlib.pyplot as plt
@@ -11,24 +10,18 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from configs import CMAP_SEQ
-from data_interface import data_manager
+from data_interface import load_data
 
 
 def list_data_files(directory: str) -> list[str]:
-    """Return list of files in *directory* using ``grep``."""
-    cmd = f"grep -al '' {os.path.join(directory, '*')}"
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    """Return list of data files in *directory*."""
     exts = {".mat", ".h5", ".hdf5", ".cgns"}
-    return [f for f in files if os.path.splitext(f)[1].lower() in exts]
-
-
-def get_loader(file_path: str):
-    """Return loader instance capable of handling *file_path* or ``None``."""
-    for loader in data_manager.loaders:
-        if loader.supports_format(file_path):
-            return loader
-    return None
+    files = []
+    for name in os.listdir(directory):
+        path = os.path.join(directory, name)
+        if os.path.isfile(path) and os.path.splitext(name)[1].lower() in exts:
+            files.append(path)
+    return sorted(files)
 
 
 def plot_snapshots(data: dict, file_path: str) -> None:
@@ -41,7 +34,12 @@ def plot_snapshots(data: dict, file_path: str) -> None:
     x = data.get("x", np.arange(nx))
     y = data.get("y", np.arange(ny))
 
-    indices = [0, ns // 4, ns // 2, (3 * ns) // 4]
+    indices = [
+        0,
+        int(0.25 * (ns - 1)),
+        int(0.5 * (ns - 1)),
+        int(0.75 * (ns - 1)),
+    ]
 
     is_2d = nx > 1 and ny > 1 and q.shape[1] == nx * ny * nz
 
@@ -85,11 +83,11 @@ def main() -> None:
         return
 
     for file_path in files:
-        loader = get_loader(file_path)
-        if loader is None:
-            print(f"No loader available for {file_path}")
+        try:
+            data = load_data(file_path)
+        except Exception as exc:
+            print(f"Failed to load {file_path}: {exc}")
             continue
-        data = loader.load(file_path)
         plot_snapshots(data, file_path)
 
 
