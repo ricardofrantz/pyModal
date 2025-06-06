@@ -20,8 +20,6 @@ import time
 import h5py
 import matplotlib.pyplot as plt
 
-from parallel_utils import print_optimization_status
-
 # Third-party imports
 import numpy as np
 import scipy.linalg  # For eigh
@@ -29,14 +27,17 @@ import scipy.linalg  # For eigh
 from configs import (
     CMAP_DIV,
     CMAP_SEQ,
+    FIG_DPI,
     FIGURES_DIR_POD,
     RESULTS_DIR_POD,
 )
+from parallel_utils import print_optimization_status
 
 # Local application/library specific imports
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,
+    get_aspect_ratio,
     load_jetles_data,
     load_mat_data,
     make_result_filename,  # For saving results
@@ -324,7 +325,7 @@ class PODAnalyzer(BaseAnalyzer):
         plt.close()
         print(f"POD eigenvalue plot saved to {plot_filename}")
 
-    def plot_modes(self, n_modes_to_plot=4):
+    def plot_modes(self, plot_n_modes: int | None = 10) -> None:
         """Plot the spatial POD modes.
 
         Visualizes the first `n_modes_to_plot` dominant spatial modes.
@@ -333,15 +334,17 @@ class PODAnalyzer(BaseAnalyzer):
         Plots are saved to `self.figures_dir`.
 
         Args:
-            n_modes_to_plot (int, optional): Number of leading spatial modes to plot.
-                                           Defaults to 4.
+            plot_n_modes (int | None, optional): Number of leading spatial modes to
+                plot. If ``None`` all available modes are plotted. Defaults to 10.
         """
         if self.modes.size == 0:
             print("No modes to plot. Run perform_pod() first.")
             return
 
-        n_modes_to_plot = min(n_modes_to_plot, self.modes.shape[1], self.n_modes_save)
-        if n_modes_to_plot == 0:
+        n_modes = self.modes.shape[1]
+        if plot_n_modes is not None:
+            n_modes = min(plot_n_modes, n_modes, self.n_modes_save)
+        if n_modes == 0:
             print("No modes available to plot.")
             return
 
@@ -351,46 +354,49 @@ class PODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
-        if x_coords.ndim == 1 and y_coords.ndim == 1:
-            dx = x_coords.max() - x_coords.min()
-            dy = y_coords.max() - y_coords.min()
-            aspect_ratio = dy / dx if dx > 0 and dy > 0 else "auto"
-        else:
-            aspect_ratio = "auto"
+        aspect_ratio = get_aspect_ratio(self.data)
 
         # Determine if plotting 1D or 2D modes
         is_2d_plot = (self.modes.shape[0] == Nx * Ny) and (Nx > 1 and Ny > 1)
 
-        num_cols = min(n_modes_to_plot, 2)  # Max 2 columns
-        num_rows = (n_modes_to_plot + num_cols - 1) // num_cols
-        fig_width = 6 * num_cols
-        fig_height = 5 * num_rows
+        var_name = self.data.get("metadata", {}).get("var_name", "q")
 
-        plt.figure(figsize=(fig_width, fig_height))
-
-        for i in range(n_modes_to_plot):
-            plt.subplot(num_rows, num_cols, i + 1)
+        for i in range(n_modes):
+            fig, ax = plt.subplots(figsize=(6, 5))
             mode_to_plot = self.modes[:, i]
             if is_2d_plot:
                 mode_reshaped = mode_to_plot.reshape(Nx, Ny)
-                # Determine extent for imshow if x,y are 1D arrays
-                extent = [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()] if x_coords.ndim == 1 and y_coords.ndim == 1 else None
-                plt.imshow(mode_reshaped.T, aspect=aspect_ratio, origin="lower", extent=extent, cmap=CMAP_SEQ)
-                plt.colorbar(label="Mode Amplitude")
-                plt.xlabel("X")
-                plt.ylabel("Y")
-            else:  # 1D plot
-                plt.plot(mode_to_plot)
-                plt.xlabel("Spatial Index")
-                plt.ylabel("Mode Amplitude")
+                extent = (
+                    x_coords.min(),
+                    x_coords.max(),
+                    y_coords.min(),
+                    y_coords.max(),
+                )
+                im = ax.imshow(
+                    mode_reshaped.T,
+                    aspect=aspect_ratio,
+                    origin="lower",
+                    extent=extent,
+                    cmap=CMAP_SEQ,
+                )
+                fig.colorbar(im, ax=ax, label="Mode amplitude")
+                ax.set_xlabel("X")
+                ax.set_ylabel("Y")
+            else:
+                ax.plot(mode_to_plot)
+                ax.set_xlabel("Spatial index")
+                ax.set_ylabel("Mode amplitude")
 
-            plt.title(f"POD Mode {i + 1} (Energy: {self.eigenvalues[i] / np.sum(self.eigenvalues) * 100:.2f}%)")
-
-        plt.tight_layout()
-        plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_modes.png")
-        plt.savefig(plot_filename)
-        plt.close()
-        print(f"POD mode plot saved to {plot_filename}")
+            energy = self.eigenvalues[i] / np.sum(self.eigenvalues) * 100
+            ax.set_title(f"POD Mode {i + 1} ({energy:.2f}% energy) [{var_name}]")
+            fig.tight_layout()
+            plot_filename = os.path.join(
+                self.figures_dir,
+                f"{self.data_root}_pod_mode{i + 1}_{var_name}.png",
+            )
+            fig.savefig(plot_filename, dpi=FIG_DPI)
+            plt.close(fig)
+            print(f"POD mode {i + 1} plot saved to {plot_filename}")
 
     def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None):
         """Plot the temporal coefficients for selected modes.

@@ -83,6 +83,13 @@ def compute_aspect_ratio(x_coords, y_coords):
     return "auto"
 
 
+def get_aspect_ratio(data: dict) -> float | str:
+    """Return aspect ratio for ``data`` using available coordinates."""
+    x = data.get("x", [])
+    y = data.get("y", [])
+    return compute_aspect_ratio(x, y)
+
+
 def load_jetles_data(file_path):
     return di_load_jetles_data(file_path)
 

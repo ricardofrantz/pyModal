@@ -19,13 +19,14 @@ import scipy.linalg
 
 from configs import (
     CMAP_DIV,
+    FIG_DPI,
     FIGURES_DIR_DMD,
     RESULTS_DIR_DMD,
 )
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,
-    compute_aspect_ratio,
+    get_aspect_ratio,
     load_jetles_data,
     load_mat_data,
     make_result_filename,
@@ -134,22 +135,26 @@ class DMDAnalyzer(BaseAnalyzer):
         plt.close()
         print(f"Eigenvalue plot saved to {fname}")
 
-    def plot_modes(self, n_modes_to_plot=4):
-        """Plot spatial DMD modes."""
+    def plot_modes(self, plot_n_modes: int | None = 10) -> None:
+        """Plot spatial DMD modes as separate figures."""
         if self.modes.size == 0:
             print("No modes to plot.")
             return
-        n_modes_to_plot = min(n_modes_to_plot, self.modes.shape[1])
+
+        n_modes = self.modes.shape[1]
+        if plot_n_modes is not None:
+            n_modes = min(plot_n_modes, n_modes)
+
         nx = self.data.get("Nx", int(np.sqrt(self.modes.shape[0])))
         ny = self.data.get("Ny", int(np.sqrt(self.modes.shape[0])))
         x_coords = self.data.get("x", np.arange(nx))
         y_coords = self.data.get("y", np.arange(ny))
         is_2d = self.modes.shape[0] == nx * ny and nx > 1 and ny > 1
-        aspect_ratio = compute_aspect_ratio(x_coords, y_coords)
+        aspect_ratio = get_aspect_ratio(self.data)
+        var_name = self.data.get("metadata", {}).get("var_name", "q")
 
-        plt.figure(figsize=(4 * n_modes_to_plot, 4))
-        for i in range(n_modes_to_plot):
-            plt.subplot(1, n_modes_to_plot, i + 1)
+        for i in range(n_modes):
+            fig, ax = plt.subplots(figsize=(5, 4))
             mode = self.modes[:, i].real
             if is_2d:
                 img = mode.reshape(nx, ny).T
@@ -159,22 +164,29 @@ class DMDAnalyzer(BaseAnalyzer):
                     y_coords.min(),
                     y_coords.max(),
                 )
-                plt.imshow(
+                im = ax.imshow(
                     img,
                     origin="lower",
                     extent=extent,
                     cmap=CMAP_DIV,
                     aspect=aspect_ratio,
                 )
-                plt.colorbar(label="Mode amplitude")
+                fig.colorbar(im, ax=ax, label="Mode amplitude")
+                ax.set_xlabel("X")
+                ax.set_ylabel("Y")
             else:
-                plt.plot(mode)
-            plt.title(f"Mode {i + 1}")
-        plt.tight_layout()
-        fname = os.path.join(self.figures_dir, f"{self.data_root}_dmd_modes.png")
-        plt.savefig(fname)
-        plt.close()
-        print(f"Mode plot saved to {fname}")
+                ax.plot(mode)
+                ax.set_xlabel("Spatial index")
+                ax.set_ylabel("Amplitude")
+            ax.set_title(f"DMD Mode {i + 1} [{var_name}]")
+            fig.tight_layout()
+            fname = os.path.join(
+                self.figures_dir,
+                f"{self.data_root}_dmd_mode{i + 1}_{var_name}.png",
+            )
+            fig.savefig(fname, dpi=FIG_DPI)
+            plt.close(fig)
+            print(f"Mode {i + 1} plot saved to {fname}")
 
     def plot_time_coefficients(self, n_coeffs_to_plot=2):
         """Plot DMD temporal coefficients."""

@@ -28,7 +28,7 @@ from parallel_utils import print_optimization_status
 from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,  # For example in __main__ or if SPODAnalyzer needs it directly
-    compute_aspect_ratio,
+    get_aspect_ratio,
     get_num_threads,  # Utility to get number of available CPU threads
     load_jetles_data,  # For example in __main__
     load_mat_data,  # For example in __main__
@@ -525,36 +525,24 @@ class SPODAnalyzer(BaseAnalyzer):
         plt.close(fig)
         print(f"SPOD eigenvalue plot (v2) saved to {plot_filename}")
 
-    def plot_modes(self, modes_to_plot=None, freqs_to_plot=None, save_all_modes=False):
-        """Plot spatial modes for selected mode indices and frequency bins.
-
-        Parameters
-        ----------
-        modes_to_plot : list of int, optional
-            Indices of the SPOD modes to display.  If ``None`` the first mode is
-            used.
-        freqs_to_plot : list of int or float, optional
-            Frequency bins or Strouhal numbers identifying which frequencies to
-            plot.  If values are floats they are interpreted as Strouhal numbers
-            and the closest available bin is selected.  When ``None`` the
-            frequency with maximum energy in the first mode is chosen.
-        save_all_modes : bool, optional
-            If ``True`` each mode is saved in a separate figure.  Otherwise all
-            requested modes for a frequency are plotted together.
-        """
+    def plot_modes(self, freqs_to_plot=None, plot_n_modes: int | None = 10) -> None:
+        """Plot spatial modes for selected frequencies as individual figures."""
 
         if self.modes.size == 0 or self.St.size == 0:
             print("No modes to plot. Run perform_spod() first.")
             return
 
-        # Default selections
-        if modes_to_plot is None:
-            modes_to_plot = list(range(min(10, self.modes.shape[2])))
+        n_modes_total = self.modes.shape[2]
+        if plot_n_modes is None:
+            n_modes = n_modes_total
+        else:
+            n_modes = min(plot_n_modes, n_modes_total)
+        modes_to_plot = list(range(n_modes))
+
         if freqs_to_plot is None:
-            dominant_idx = np.argmax(self.eigenvalues[:, 0])
+            dominant_idx = int(np.argmax(self.eigenvalues[:, 0]))
             freqs_to_plot = [dominant_idx]
 
-        # Convert frequency values to indices if necessary
         freq_indices = []
         for f in freqs_to_plot:
             if isinstance(f, (int, np.integer)) and 0 <= f < len(self.St):
@@ -567,44 +555,36 @@ class SPODAnalyzer(BaseAnalyzer):
         x_coords = self.data.get("x", np.arange(Nx))
         y_coords = self.data.get("y", np.arange(Ny))
 
-        aspect_ratio = compute_aspect_ratio(x_coords, y_coords)
+        aspect_ratio = get_aspect_ratio(self.data)
+        var_name = self.data.get("metadata", {}).get("var_name", "q")
 
         for f_idx in freq_indices:
             st_val = self.St[f_idx]
-            n_modes = len(modes_to_plot)
-            ncols = min(n_modes, 4)
-            nrows = int(np.ceil(n_modes / ncols))
-            fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows), squeeze=False)
-            axes = axes.flatten()
-
-            im = None
-            for i, m_idx in enumerate(modes_to_plot):
+            for m_idx in modes_to_plot:
                 if m_idx >= self.modes.shape[2]:
                     continue
+                fig, ax = plt.subplots(figsize=(5, 4))
                 mode_real = self.modes[f_idx, :, m_idx].real
                 if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
                     mode_2d = mode_real.reshape(Nx, Ny).T
-                    im = axes[i].contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
-                    axes[i].set_aspect(aspect_ratio)
+                    im = ax.contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
+                    ax.set_aspect(aspect_ratio)
+                    fig.colorbar(im, ax=ax, shrink=0.8, label=r"Re($\Phi$)")
+                    ax.set_xlabel("X")
+                    ax.set_ylabel("Y")
                 else:
-                    im = axes[i].plot(mode_real)
-                axes[i].set_title(f"Mode {m_idx + 1}")
-            for j in range(n_modes, len(axes)):
-                axes[j].axis("off")
-
-            if isinstance(im, list):
-                im = None  # For 1D plots contourf not used
-            if im is not None:
-                fig.colorbar(im, ax=axes[:n_modes], shrink=0.8, label=r"Re($\Phi$)")
-            fig.suptitle(f"SPOD Modes at St={st_val:.4f}")
-
-            plot_filename = os.path.join(
-                self.figures_dir,
-                f"{self.data_root}_SPOD_modes_St{st_val:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
-            )
-            plt.savefig(plot_filename, dpi=FIG_DPI)
-            plt.close(fig)
-            print(f"SPOD mode plot saved to {plot_filename}")
+                    ax.plot(mode_real)
+                    ax.set_xlabel("Spatial index")
+                    ax.set_ylabel("Amplitude")
+                ax.set_title(f"SPOD Mode {m_idx + 1} at St={st_val:.4f} [{var_name}]")
+                fig.tight_layout()
+                plot_filename = os.path.join(
+                    self.figures_dir,
+                    f"{self.data_root}_SPOD_mode{m_idx + 1}_St{st_val:.4f}_{var_name}.png",
+                )
+                fig.savefig(plot_filename, dpi=FIG_DPI)
+                plt.close(fig)
+                print(f"SPOD mode {m_idx + 1} plot saved to {plot_filename}")
 
     def plot_cumulative_energy(self, freq_idx=None):
         """Plot cumulative energy captured by modes at a given frequency."""
