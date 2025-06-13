@@ -151,111 +151,133 @@ class PODAnalyzer(BaseAnalyzer):
 
         # Data is expected as [time, space]
         data_matrix = self.data["q"]  # Shape (Ns, Nspace)
-        num_snapshots = self.data["Ns"]
-        num_space_points = data_matrix.shape[1]
+        num_snapshots, num_space_points = data_matrix.shape
+        
+        # Input validation
+        if num_snapshots < 2:
+            raise ValueError(f"Need at least 2 snapshots for POD, got {num_snapshots}")
+        if num_space_points < 1:
+            raise ValueError(f"Need at least 1 spatial point, got {num_space_points}")
 
-        # 1. Subtract temporal mean
-        # For POD, typically the mean over snapshots is removed.
-        self.temporal_mean = np.mean(data_matrix, axis=0)  # Mean over time, shape (Nspace,)
-        data_mean_removed = data_matrix - self.temporal_mean  # Shape (Ns, Nspace)
+        # 1. Subtract temporal mean (more efficient with axis parameter)
+        self.temporal_mean = np.mean(data_matrix, axis=0, dtype=np.float64)
+        data_mean_removed = data_matrix - self.temporal_mean
 
-        # 2. Apply spatial weights
-        # Robust fix: for uniform weights, always set W to correct length here
+        # 2. Apply spatial weights with better handling
         if self.spatial_weight_type == "uniform":
-            self.W = np.ones(self.data['q'].shape[1], dtype=float)
-        # self.W is [Nspace, Nspace] diagonal matrix or [Nspace] vector for weights.
-        # If W is a vector, apply element-wise multiplication after transposing data_mean_removed.
-        # If W is a diagonal matrix, it's data_mean_removed @ W (assuming W is diag(weights_vector))
-        # PySPOD uses d.conj().T @ (d * self._weights), where d is [Nspace, Ntime] and weights are [Nspace, 1]
-        # Let's ensure W is a 1D array of weights for element-wise multiplication with spatial dimensions.
-        if self.W.ndim == 2 and self.W.shape[0] == self.W.shape[1]:
-            weight_vector = np.diag(self.W)
-        elif self.W.ndim == 1:
+            self.W = np.ones(num_space_points, dtype=np.float64)
+        
+        # Ensure W is a 1D array for efficient broadcasting
+        if self.W.ndim == 2:
+            if self.W.shape[0] == self.W.shape[1]:
+                weight_vector = np.diag(self.W)
+            elif self.W.shape[1] == 1:
+                weight_vector = self.W.ravel()
+            else:
+                raise ValueError(f"Unexpected shape for spatial weights W: {self.W.shape}")
+        else:
             weight_vector = self.W
-        elif self.W.ndim == 2 and self.W.shape[1] == 1:  # Handle (Nspace, 1) column vector
-            weight_vector = self.W.flatten()
-        else:
-            raise ValueError(f"Unexpected shape for spatial weights W: {self.W.shape}")
+            
+        # Validate weight vector
+        if len(weight_vector) != num_space_points:
+            raise ValueError(f"Weight vector length {len(weight_vector)} doesn't match spatial points {num_space_points}")
 
-        # data_mean_removed is (Ns, Nspace). Apply weights to spatial dimension.
-        # (data_mean_removed * sqrt(weight_vector)) results in shape (Ns, Nspace)
-        data_weighted = data_mean_removed * np.sqrt(weight_vector)  # Element-wise multiplication
+        # Apply weights efficiently using broadcasting
+        sqrt_weights = np.sqrt(np.maximum(weight_vector, 1e-12))  # Avoid sqrt of negative/zero
+        data_weighted = data_mean_removed * sqrt_weights
 
-        # 3. Form covariance matrix (Temporal covariance K_ij = <u_i(t) u_j(t)>_t )
-        # Using method of snapshots: C = X^T * X where X is (Ns, Nspace_weighted)
-        # The eigenvalue problem is C * A = Lambda * A, where A are temporal coeffs.
-        # Or, use SVD: X = U * Sigma * Vh. Modes are U or Vh depending on X arrangement.
-        # If X is (Time, Space), then U gives temporal structures, Vh gives spatial structures.
-        # PySPOD style: d is (Nspace, Ntime). Q = d.conj().T @ (d * self._weights_vector)
-        # This is (Ntime, Nspace_w) @ (Nspace_w, Ntime) -> (Ntime, Ntime) (temporal kernel)
-
-        # Let's follow snapshot POD: data_weighted is (Ns, Nspace)
-        # K_t = data_weighted @ data_weighted.T  (Ns, Ns) -- Temporal kernel
-        # K_s = data_weighted.T @ data_weighted  (Nspace, Nspace) -- Spatial kernel
-        # For Ns < Nspace, solve temporal kernel. For Nspace < Ns, solve spatial kernel.
-
-        if num_snapshots < num_space_points:
-            print(f"Number of snapshots ({num_snapshots}) < number of spatial points ({num_space_points}). Solving temporal eigenvalue problem.")
-            K = (1.0 / num_snapshots) * (data_weighted @ data_weighted.T)  # (Ns, Ns)
+        # 3. Choose eigenvalue problem based on efficiency
+        use_temporal_kernel = num_snapshots < num_space_points
+        
+        if use_temporal_kernel:
+            print(f"Using temporal kernel: {num_snapshots} snapshots < {num_space_points} spatial points")
+            # K = (1/Ns) * X * X^T where X is weighted data
+            K = np.dot(data_weighted, data_weighted.T) / num_snapshots
             eigenvalues_temp, temporal_coeffs_unscaled = scipy.linalg.eigh(K)
-            # Sort eigenvalues and eigenvectors in descending order
-            sorted_indices = np.argsort(eigenvalues_temp)[::-1]
-            self.eigenvalues = eigenvalues_temp[sorted_indices]
-            temporal_coeffs_unscaled = temporal_coeffs_unscaled[:, sorted_indices]
-            # Calculate spatial modes: Phi = data_weighted.T @ A_temp * (1/sqrt(Lambda_temp * Ns))
-            # data_weighted.T is (Nspace, Ns). temporal_coeffs_unscaled is (Ns, Ns)
-            # modes_unnorm = data_weighted.T @ temporal_coeffs_unscaled # (Nspace, Ns)
-            # self.modes = modes_unnorm / np.sqrt(self.eigenvalues * Ns) # Normalize modes
-            # Alternative normalization for modes to be orthonormal with weights:
-            # Phi = X_weighted^T * Psi_weighted / Lambda_weighted
-            # Let Psi_temp be the eigenvectors of K_t. Phi = X_weighted^T * Psi_temp
-            modes_temp = data_weighted.T @ temporal_coeffs_unscaled  # (Nspace, Ns)
-            # Normalize spatial modes: divide by sqrt(eigenvalue * Ns) and by sqrt(weights_vector)
-            # Each column of modes_temp corresponds to an eigenvalue.
-            # modes_temp[:, k] / sqrt(lambda_k * Ns) gives modes scaled by sqrt(W)
-            # To get actual spatial modes, divide by sqrt(W) again
-            # For modes to be orthonormal w.r.t W: Phi_i^T W Phi_j = delta_ij
-            # Phi = X^T Psi / sqrt(Lambda)
-            # Let X_w = X * sqrt(W). K_t = X_w X_w^T. Psi_w from K_t Psi_w = Lambda Psi_w.
-            # Phi_w = X_w^T Psi_w / sqrt(Lambda). Here Phi_w = Phi * sqrt(W).
-            # So, Phi = (X_w^T Psi_w / sqrt(Lambda)) / sqrt(W)
-            # modes_temp = data_weighted.T @ temporal_coeffs_unscaled is (Nspace, Ns) = X_w^T Psi_w
-            self.modes = (modes_temp / np.sqrt(np.maximum(self.eigenvalues * num_snapshots, 1e-12))) / np.sqrt(weight_vector[:, np.newaxis])
-            self.time_coefficients = temporal_coeffs_unscaled * np.sqrt(np.maximum(self.eigenvalues * num_snapshots, 1e-12))  # Scale temporal coefficients
-
+            
+            # Sort in descending order
+            sort_idx = np.argsort(eigenvalues_temp)[::-1]
+            self.eigenvalues = eigenvalues_temp[sort_idx]
+            temporal_coeffs_unscaled = temporal_coeffs_unscaled[:, sort_idx]
+            
+            # Compute spatial modes efficiently
+            # Avoid division by very small eigenvalues
+            safe_eigenvals = np.maximum(self.eigenvalues * num_snapshots, 1e-12)
+            normalization = 1.0 / np.sqrt(safe_eigenvals)
+            
+            modes_temp = np.dot(data_weighted.T, temporal_coeffs_unscaled)
+            self.modes = (modes_temp * normalization) / sqrt_weights[:, np.newaxis]
+            self.time_coefficients = temporal_coeffs_unscaled * np.sqrt(safe_eigenvals)
+            
         else:
-            print(f"Number of spatial points ({num_space_points}) <= number of snapshots ({num_snapshots}). Solving spatial eigenvalue problem.")
-            K = (1.0 / num_snapshots) * (data_weighted.T @ data_weighted)  # (Nspace, Nspace)
+            print(f"Using spatial kernel: {num_space_points} spatial points <= {num_snapshots} snapshots")
+            # K = (1/Ns) * X^T * X where X is weighted data  
+            K = np.dot(data_weighted.T, data_weighted) / num_snapshots
             eigenvalues_spatial, spatial_modes_weighted = scipy.linalg.eigh(K)
-            # Sort eigenvalues and eigenvectors
-            sorted_indices = np.argsort(eigenvalues_spatial)[::-1]
-            self.eigenvalues = eigenvalues_spatial[sorted_indices]
-            spatial_modes_weighted = spatial_modes_weighted[:, sorted_indices]
-            # Spatial modes (weighted) are eigenvectors of K_s.
-            # To get unweighted modes: Phi = Phi_w / sqrt(W)
-            self.modes = spatial_modes_weighted / np.sqrt(np.maximum(weight_vector[:, np.newaxis], 1e-12))
-            # Calculate temporal coefficients: Psi = X @ Phi (project original mean-removed data onto unweighted modes)
-            # data_mean_removed is (Ns, Nspace). self.modes is (Nspace, n_modes_save)
-            self.time_coefficients = data_mean_removed @ self.modes
+            
+            # Sort in descending order
+            sort_idx = np.argsort(eigenvalues_spatial)[::-1]
+            self.eigenvalues = eigenvalues_spatial[sort_idx]
+            spatial_modes_weighted = spatial_modes_weighted[:, sort_idx]
+            
+            # Get unweighted modes
+            self.modes = spatial_modes_weighted / sqrt_weights[:, np.newaxis]
+            # Project data onto modes
+            self.time_coefficients = np.dot(data_mean_removed, self.modes)
 
-        # Ensure modes are real (they should be from eigh on symmetric matrix)
+        # Ensure real values (should be real from eigh on symmetric matrix)
         self.modes = np.real(self.modes)
         self.eigenvalues = np.real(self.eigenvalues)
         self.time_coefficients = np.real(self.time_coefficients)
 
-        # Truncate if n_modes_save is less than available modes
-        n_available_modes = self.eigenvalues.shape[0]
+        # Truncate to requested number of modes
+        n_available_modes = len(self.eigenvalues)
         if self.n_modes_save > n_available_modes:
-            print(f"Warning: n_modes_save ({self.n_modes_save}) is greater than available modes ({n_available_modes}). Using all available modes.")
+            print(f"Warning: n_modes_save ({self.n_modes_save}) > available modes ({n_available_modes}). Using all available.")
             self.n_modes_save = n_available_modes
 
-        self.modes = self.modes[:, : self.n_modes_save]
-        self.eigenvalues = self.eigenvalues[: self.n_modes_save]
-        self.time_coefficients = self.time_coefficients[:, : self.n_modes_save]
+        self.modes = self.modes[:, :self.n_modes_save]
+        self.eigenvalues = self.eigenvalues[:self.n_modes_save]
+        self.time_coefficients = self.time_coefficients[:, :self.n_modes_save]
 
         end_time = time.time()
         print(f"POD analysis completed in {end_time - start_time:.2f} seconds.")
         print(f"Computed {self.modes.shape[1]} POD modes.")
+        
+        # Print energy summary
+        total_energy = np.sum(self.eigenvalues)
+        if total_energy > 0:
+            energy_pct = 100.0 * np.sum(self.eigenvalues) / np.sum(self.eigenvalues)
+            print(f"Energy captured by {self.n_modes_save} modes: {energy_pct:.2f}%")
+
+    def load_results(self, filename=None):
+        """Load POD modes, eigenvalues, and time coefficients from an HDF5 file."""
+        if not filename:
+            filename = f"{self.data_root}_{self.data.get('Ns', 0)}snapshots_{self.analysis_type}.hdf5"
+        load_path = os.path.join(self.results_dir, filename)
+        print(f"Loading POD results from {load_path}")
+        with h5py.File(load_path, "r") as f:
+            # Load coordinates and weights (if present)
+            if "x" in f:
+                self.data["x"] = f["x"][:]
+            if "y" in f:
+                self.data["y"] = f["y"][:]
+            if "W" in f:
+                self.W = f["W"][:]
+            if "temporal_mean" in f:
+                self.temporal_mean = f["temporal_mean"][:]
+            # Load POD results
+            self.modes = f["modes"][:]
+            self.eigenvalues = f["eigenvalues"][:]
+            self.time_coefficients = f["time_coefficients"][:]
+            # Load other attributes if present
+            if "dt" in f.attrs:
+                self.data["dt"] = f.attrs["dt"]
+            if "n_snapshots" in f.attrs:
+                self.data["Ns"] = f.attrs["n_snapshots"]
+            if "Nspace" in f.attrs:
+                self.data["Nspace"] = f.attrs["Nspace"]
+        print("POD results loaded.")
 
     def save_results(self, filename=None):
         """Save POD modes, eigenvalues, and time coefficients to an HDF5 file.
@@ -317,18 +339,36 @@ class PODAnalyzer(BaseAnalyzer):
             print("No eigenvalues to plot. Run perform_pod() first.")
             return
 
-        plt.figure(figsize=(8, 5))
-        mode_indices = np.arange(1, len(self.eigenvalues) + 1)
-        plt.plot(mode_indices, self.eigenvalues / np.sum(self.eigenvalues) * 100, "o-", linewidth=2, markersize=6)
-        plt.yscale("log")  # Eigenvalue spectrum is often plotted on a log scale
-        plt.xlabel("Mode Number")
-        plt.ylabel("Normalized Eigenvalue (Energy Percentage %)")
-        plt.title("POD Eigenvalue Spectrum")
-        plt.grid(True, which="both", ls="--")
-        plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_eigenvalues.png")
-        plt.savefig(plot_filename, dpi=FIG_DPI)
-        plt.close()
-        print(f"Saving figure {plot_filename}")
+        # Create figure with better memory management
+        fig, ax = plt.subplots(figsize=(8, 5))
+        try:
+            mode_indices = np.arange(1, len(self.eigenvalues) + 1)
+            normalized_eigenvals = self.eigenvalues / np.sum(self.eigenvalues) * 100
+            
+            ax.plot(mode_indices, normalized_eigenvals, "o-", linewidth=2, markersize=6)
+            
+            # Annotate only first few and last few points to avoid clutter
+            n_annotate = min(5, len(mode_indices))
+            for idx in range(n_annotate):
+                ax.text(mode_indices[idx], normalized_eigenvals[idx], f" {idx+1}", 
+                       fontsize=7, va="bottom")
+            if len(mode_indices) > n_annotate:
+                for idx in range(max(n_annotate, len(mode_indices)-3), len(mode_indices)):
+                    ax.text(mode_indices[idx], normalized_eigenvals[idx], f" {idx+1}", 
+                           fontsize=7, va="bottom")
+                    
+            ax.set_yscale("log")
+            ax.set_xlabel("Mode Number")
+            ax.set_ylabel("Normalized Eigenvalue (Energy Percentage %)")
+            ax.set_title("POD Eigenvalue Spectrum")
+            ax.grid(True, which="both", ls="--")
+            
+            plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_eigenvalues.png")
+            plt.savefig(plot_filename, dpi=FIG_DPI, bbox_inches='tight')
+            print(f"Saving figure {plot_filename}")
+            
+        finally:
+            plt.close(fig)  # Ensure figure is closed even if error occurs
 
     def plot_modes(self, plot_n_modes: Optional[int] = 10, modes_per_fig: int = 1) -> None:
         """Plot the spatial POD modes.
@@ -369,60 +409,63 @@ class PODAnalyzer(BaseAnalyzer):
         for start in range(0, n_modes, modes_per_fig):
             end = min(start + modes_per_fig, n_modes)
             ncols = end - start
-            if is_2d_plot:
-                fig, axes = plt.subplots(
-                    1,
-                    ncols,
-                    figsize=(4 * ncols * fig_aspect, 4),
-                    squeeze=False,
-                )
-                for idx, mode_idx in enumerate(range(start, end)):
-                    ax = axes[0, idx]
-                    mode = self.modes[:, mode_idx]
-                    # Reshape mode to 2D
-                    mode_2d = mode.reshape((Nx, Ny))
-                    # Get meshgrid for plotting
-                    if x_coords.ndim == 1 and y_coords.ndim == 1:
-                        x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
-                    else:
-                        x_mesh, y_mesh = x_coords, y_coords
-                    # Cylinder mask and plotting limits
-                    distance = np.sqrt(x_mesh**2 + y_mesh**2)
-                    cylinder_mask = distance <= 0.5
-                    # Compute levels using only values outside the cylinder
-                    mode_flat = mode_2d[~cylinder_mask]
-                    vmin = np.nanmin(mode_flat)
-                    vmax = np.nanmax(mode_flat)
-                    levels = np.linspace(vmin, vmax, 21)
-                    # Masked array for plotting
-                    mode_plot = np.ma.array(mode_2d, mask=cylinder_mask)
-                    # Plot filled contour
-                    cf = ax.contourf(x_mesh, y_mesh, mode_plot, levels=levels, cmap=CMAP_SEQ, extend="both")
-                    # Contour lines
-                    cs = ax.contour(x_mesh, y_mesh, mode_plot, levels=levels[::4], colors="k", linewidths=0.5, alpha=0.5)
-                    # Cylinder
-                    cylinder = plt.Circle((0, 0), 0.5, fill=True, linewidth=0.5, zorder=3, facecolor="lightgray", edgecolor="black")
-                    ax.add_patch(cylinder)
-                    # Labels and aspect
-                    ax.set_xlabel(r"$x/D$")
-                    ax.set_ylabel(r"$y/D$")
-                    ax.set_aspect("equal", "box")
-                    ax.set_xlim(np.min(x_coords), np.max(x_coords))
-                    ax.set_ylim(np.min(y_coords), np.max(y_coords))
-                    ax.grid(True, linestyle="--", alpha=0.3)
-                    # Calculate energy and cumulative energy
-                    if self.eigenvalues is not None and len(self.eigenvalues) > mode_idx:
-                        total_energy = np.sum(self.eigenvalues)
-                        energy_pct = 100.0 * self.eigenvalues[mode_idx] / total_energy
-                        cum_energy_pct = 100.0 * np.sum(self.eigenvalues[:mode_idx+1]) / total_energy
-                        title_str = (f"POD Mode {mode_idx + 1} [{var_name}] | "
-                                     f"Energy: {energy_pct:.2f}% | "
-                                     f"Cumulative: {cum_energy_pct:.2f}%")
-                    else:
-                        title_str = f"POD Mode {mode_idx + 1} [{var_name}]"
-                    ax.set_title(title_str)
-                    # Colorbar
-                    fig.colorbar(cf, ax=ax, format="%.2f")
+            if not is_2d_plot:
+                print("plot_modes currently supports 2-D fields only.")
+                return
+
+            fig, axes = plt.subplots(
+                1,
+                ncols,
+                figsize=(4 * ncols * fig_aspect, 4),
+                squeeze=False,
+            )
+            for idx, mode_idx in enumerate(range(start, end)):
+                ax = axes[0, idx]
+                mode = self.modes[:, mode_idx]
+                # Reshape mode to 2D
+                mode_2d = mode.reshape((Nx, Ny))
+                # Get meshgrid for plotting
+                if x_coords.ndim == 1 and y_coords.ndim == 1:
+                    x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
+                else:
+                    x_mesh, y_mesh = x_coords, y_coords
+                # Cylinder mask and plotting limits
+                distance = np.sqrt(x_mesh**2 + y_mesh**2)
+                cylinder_mask = distance <= 0.5
+                # Compute levels using only values outside the cylinder
+                mode_flat = mode_2d[~cylinder_mask]
+                vmin = np.nanmin(mode_flat)
+                vmax = np.nanmax(mode_flat)
+                levels = np.linspace(vmin, vmax, 21)
+                # Masked array for plotting
+                mode_plot = np.ma.array(mode_2d, mask=cylinder_mask)
+                # Plot filled contour
+                cf = ax.contourf(x_mesh, y_mesh, mode_plot, levels=levels, cmap=CMAP_SEQ, extend="both")
+                # Contour lines
+                cs = ax.contour(x_mesh, y_mesh, mode_plot, levels=levels[::4], colors="k", linewidths=0.5, alpha=0.5)
+                # Cylinder
+                cylinder = plt.Circle((0, 0), 0.5, fill=True, linewidth=0.5, zorder=3, facecolor="lightgray", edgecolor="black")
+                ax.add_patch(cylinder)
+                # Labels and aspect
+                ax.set_xlabel(r"$x/D$")
+                ax.set_ylabel(r"$y/D$")
+                ax.set_aspect("equal", "box")
+                ax.set_xlim(np.min(x_coords), np.max(x_coords))
+                ax.set_ylim(np.min(y_coords), np.max(y_coords))
+                ax.grid(True, linestyle="--", alpha=0.3)
+                # Calculate energy and cumulative energy
+                if self.eigenvalues is not None and len(self.eigenvalues) > mode_idx:
+                    total_energy = np.sum(self.eigenvalues)
+                    energy_pct = 100.0 * self.eigenvalues[mode_idx] / total_energy
+                    cum_energy_pct = 100.0 * np.sum(self.eigenvalues[:mode_idx+1]) / total_energy
+                    title_str = (f"POD Mode {mode_idx + 1} [{var_name}] | "
+                                 f"Energy: {energy_pct:.2f}% | "
+                                 f"Cumulative: {cum_energy_pct:.2f}%")
+                else:
+                    title_str = f"POD Mode {mode_idx + 1} [{var_name}]"
+                ax.set_title(title_str)
+                # Colorbar
+                fig.colorbar(cf, ax=ax, format="%.2f")
 
                 fig.tight_layout()
                 # Save figure as PNG with dpi=FIG_DPI
@@ -431,6 +474,242 @@ class PODAnalyzer(BaseAnalyzer):
                 plt.close(fig)
                 print(f"Saving figure {plot_filename}")
                 fig.tight_layout()
+    def plot_modes_pair_detailed(self, plot_n_modes: int = 4, cmap=CMAP_SEQ) -> None:
+        """Plot modes in pairs with an additional magnitude row (2×2 per figure).
+
+        Produces figures where the top row contains the raw spatial fields for a
+        pair of modes (e.g. mode 1 and 2) and the bottom row contains their
+        magnitudes.  Designed to replicate the 4-panel style the user wants for
+        `pod_mode_1_to_2.png`, `pod_mode_3_to_4.png`, etc.
+        """
+        if self.modes.size == 0:
+            print("No modes to plot. Run perform_pod() first.")
+            return
+
+        n_modes = min(plot_n_modes, self.modes.shape[1], self.n_modes_save)
+        if n_modes == 0:
+            print("No modes available to plot.")
+            return
+
+        Nx = self.data.get("Nx", int(np.sqrt(self.modes.shape[0])))
+        Ny = self.data.get("Ny", int(np.sqrt(self.modes.shape[0])))
+        is_2d_plot = (self.modes.shape[0] == Nx * Ny) and (Nx > 1 and Ny > 1)
+        x_coords = self.data.get("x", np.arange(Nx))
+        y_coords = self.data.get("y", np.arange(Ny))
+        fig_aspect = get_fig_aspect_ratio(self.data)
+        var_name = self.data.get("metadata", {}).get("var_name", "q")
+
+        # --- Colormap setup for raw and magnitude plots ---
+        import matplotlib.cm as cm
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        # Hold contour handles for shared colorbars (set in first loop iteration)
+        first_cf = None      # For raw (signed) mode fields
+
+        for start in range(0, n_modes, 2):
+            end = min(start + 2, n_modes)
+            ncols = end - start
+            if not is_2d_plot:
+                print("plot_modes_pair_detailed currently supports 2-D fields only.")
+                return
+
+            fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols * fig_aspect, 4), squeeze=False, constrained_layout=True)
+
+            total_energy = np.sum(self.eigenvalues)
+            for idx, mode_idx in enumerate(range(start, end)):
+                # ------------------ Only plot top row: raw mode ------------------
+                ax = axes[0, idx]
+                mode_vec = self.modes[:, mode_idx]
+                mode_2d = mode_vec.reshape((Nx, Ny))
+                if x_coords.ndim == 1 and y_coords.ndim == 1:
+                    x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
+                else:
+                    x_mesh, y_mesh = x_coords, y_coords
+                dist = np.sqrt(x_mesh ** 2 + y_mesh ** 2)
+                mask = dist <= 0.5
+                field = np.ma.array(mode_2d, mask=mask)
+                vmax = np.max(np.abs(field))
+                levels = np.linspace(-vmax, vmax, 21)
+                
+                cf = ax.contourf(
+                    x_mesh,
+                    y_mesh,
+                    field,
+                    levels=levels,
+                    cmap=CMAP_DIV,  # diverging colormap for signed mode field
+                    extend="both",
+                )
+                if first_cf is None:
+                    first_cf = cf
+                ax.add_patch(plt.Circle((0, 0), 0.5, fill=True, facecolor="lightgray", edgecolor="black", linewidth=0.5))
+                ax.set_aspect("equal", "box")
+                ax.set_xlim(np.min(x_coords), np.max(x_coords))
+                ax.set_ylim(np.min(y_coords), np.max(y_coords))
+                ax.set_xlabel(r"$x/D$")
+                ax.set_ylabel(r"$y/D$")
+                ax.grid(True, linestyle="--", alpha=0.3)
+
+                # Add individual small colorbar inside the data area (upper right)
+                from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+                cax = inset_axes(ax, width="15%", height="6%", loc='upper right', borderpad=3)
+                cb = fig.colorbar(cf, cax=cax, orientation='horizontal', format="%.2f")
+                cb.ax.tick_params(labelsize=8, pad=1, colors='black')
+                cb.ax.xaxis.set_ticks_position('top')
+                cb.ax.xaxis.set_label_position('top')
+                # Set custom ticks: min, 0, max
+                vmin, vmax = -vmax, vmax
+                cb.set_ticks([vmin, 0, vmax])
+                cb.set_ticklabels([f'{vmin:.2f}', '0', f'{vmax:.2f}'])
+                # Make colorbar background semi-transparent
+                cax.patch.set_facecolor('black')
+                cax.patch.set_alpha(0.7)
+
+                energy_pct = 100.0 * self.eigenvalues[mode_idx] / total_energy
+                cum_pct = 100.0 * np.sum(self.eigenvalues[: mode_idx + 1]) / total_energy
+                ax.set_title(f"Mode {mode_idx + 1}\nE={energy_pct:.2f}%  Cum={cum_pct:.2f}%", fontsize=8, pad=20)
+            plot_filename = os.path.join(
+                self.figures_dir, f"{self.data_root}_pod_mode_{start+1}_to_{end}.png"
+            )
+            plt.savefig(plot_filename, dpi=FIG_DPI)
+            plt.close(fig)
+            print(f"Saving figure {plot_filename}")
+
+    def plot_modes_grid(self, energy_threshold: float = 99.5, cmap=CMAP_DIV) -> None:
+        """Plot spatial POD modes side-by-side up to a cumulative energy threshold.
+
+        This produces a single figure containing all modes required to reach the
+        specified cumulative energy percentage (default 99.5%).  Each mode is
+        displayed with a diverging colormap so positive and negative regions
+        are easily distinguished.  The subplot title indicates the mode number,
+        its individual energy contribution, and the cumulative energy captured
+        up to that mode.  Axes limits, cylinder overlay, and other style
+        choices mirror those used in the DMD detailed mode plots so that the
+        two decompositions can be compared directly.
+        """
+        # Preconditions – ensure POD has been performed
+        if self.modes.size == 0 or self.eigenvalues.size == 0:
+            print("No POD modes/eigenvalues to plot. Run perform_pod() first.")
+            return
+
+        total_energy = np.sum(self.eigenvalues)
+        cumulative_pct = np.cumsum(self.eigenvalues) / total_energy * 100.0
+        # Number of modes needed to reach threshold (inclusive)
+        n_modes_plot = int(np.searchsorted(cumulative_pct, energy_threshold, side="right")) + 1
+        n_modes_plot = min(n_modes_plot, self.n_modes_save, self.modes.shape[1])
+        if n_modes_plot <= 0:
+            print("Energy threshold too low – nothing to plot.")
+            return
+
+        # Spatial grid information
+        Nx = self.data.get("Nx", int(np.sqrt(self.modes.shape[0])))
+        Ny = self.data.get("Ny", int(np.sqrt(self.modes.shape[0])))
+        is_2d_plot = (self.modes.shape[0] == Nx * Ny) and (Nx > 1 and Ny > 1)
+        x_coords = self.data.get("x", np.arange(Nx))
+        y_coords = self.data.get("y", np.arange(Ny))
+        fig_aspect = get_fig_aspect_ratio(self.data)
+        var_name = self.data.get("metadata", {}).get("var_name", "q")
+
+        # Always use two columns so rows list modes sequentially (1-2, 3-4, …)
+        ncols = 2 if n_modes_plot > 1 else 1
+        nrows = int(np.ceil(n_modes_plot / ncols))
+
+        # Create figure with constrained_layout for better spacing
+        fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols * fig_aspect, 4 * nrows), 
+                                 squeeze=False, constrained_layout=True)
+        
+        # Import make_axes_locatable for better colorbar placement
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        
+        # Track the first contourf for colorbar
+        first_cf = None
+        
+        # Plot each mode
+        for k in range(n_modes_plot):
+            row, col = divmod(k, ncols)
+            ax = axes[row][col]
+            mode_vec = self.modes[:, k]
+            
+            if is_2d_plot:
+                # Reshape mode to 2D grid
+                mode_2d = mode_vec.reshape((Nx, Ny))
+                
+                # Create meshgrid for plotting
+                if x_coords.ndim == 1 and y_coords.ndim == 1:
+                    x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
+                else:
+                    x_mesh, y_mesh = x_coords, y_coords
+                
+                # Mask interior of cylinder (radius 0.5)
+                distance = np.sqrt(x_mesh ** 2 + y_mesh ** 2)
+                cylinder_mask = distance <= 0.5
+                mode_plot = np.ma.array(mode_2d, mask=cylinder_mask)
+                
+                # Calculate contour levels with symmetric diverging scale
+                vmax = np.max(np.abs(mode_plot))
+                levels = np.linspace(-vmax, vmax, 21)
+                
+                # Plot contours
+                cf = ax.contourf(x_mesh, y_mesh, mode_plot, levels=levels, 
+                                 cmap=cmap, extend="both")
+                
+                # Add cylinder overlay
+                cyl = plt.Circle((0, 0), 0.5, fill=True, facecolor="lightgray", 
+                                edgecolor="black", linewidth=0.5)
+                ax.add_patch(cyl)
+                
+                # Set axis properties
+                ax.set_aspect("equal", "box")
+                ax.set_xlim(np.min(x_coords), np.max(x_coords))
+                ax.set_ylim(np.min(y_coords), np.max(y_coords))
+                ax.set_xlabel(r"$x/D$")
+                ax.set_ylabel(r"$y/D$")
+                ax.grid(True, linestyle="--", alpha=0.3)
+                
+                # Add individual small colorbar inside the data area (upper right)
+                pos = ax.get_position()
+                from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+                cax = inset_axes(ax, width="15%", height="6%", loc='upper right', borderpad=3)
+                cb = fig.colorbar(cf, cax=cax, orientation='horizontal', format="%.2f")
+                cb.ax.tick_params(labelsize=8, pad=1, colors='black')
+                cb.ax.xaxis.set_ticks_position('top')
+                cb.ax.xaxis.set_label_position('top')
+                # Set custom ticks: min, 0, max
+                vmin, vmax = -vmax, vmax
+                cb.set_ticks([vmin, 0, vmax])
+                cb.set_ticklabels([f'{vmin:.2f}', '0', f'{vmax:.2f}'])
+                # Make colorbar background semi-transparent
+                cax.patch.set_facecolor('black')
+                cax.patch.set_alpha(0.7)
+
+                # Add title with energy information
+                energy_pct = 100.0 * self.eigenvalues[k] / total_energy
+                cum_pct = cumulative_pct[k]
+                ax.set_title(f"Mode {k + 1}\nE={energy_pct:.2f}%  Cum={cum_pct:.2f}%", fontsize=8, pad=20)
+            else:
+                # 1D mode plotting (fallback)
+                ax.plot(mode_vec)
+                ax.set_xlabel("Spatial Index")
+                ax.set_ylabel(f"{var_name} amplitude")
+                ax.set_title(f"Mode {k + 1}")
+        
+        # Hide any extra subplots
+        for idx in range(n_modes_plot, nrows * ncols):
+            r, c = divmod(idx, ncols)
+            axes[r][c].axis("off")
+        
+        # Add title and save
+        fig.suptitle(
+            f"POD Modes up to {energy_threshold:.1f}% cumulative energy ({n_modes_plot} modes)", fontsize=12
+        )
+        
+        plot_filename = os.path.join(
+            self.figures_dir,
+            f"{self.data_root}_pod_modes_grid_{energy_threshold:.1f}perc.png",
+        )
+        plt.savefig(plot_filename, dpi=FIG_DPI)
+        plt.close(fig)
+        print(f"Saving figure {plot_filename}")
+
     def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None):
         """Plot the temporal coefficients for selected modes.
 
@@ -458,7 +737,11 @@ class PODAnalyzer(BaseAnalyzer):
         if n_snapshots_plot is None or n_snapshots_plot > Ns_total:
             n_snapshots_plot = Ns_total
 
-        time_vector = np.arange(n_snapshots_plot) * self.data.get("dt", 1.0)
+        # Prefer explicit time vector if provided in data
+        if "t" in self.data and len(self.data["t"]) >= n_snapshots_plot:
+            time_vector = self.data["t"][:n_snapshots_plot]
+        else:
+            time_vector = np.arange(n_snapshots_plot) * self.data.get("dt", 1.0)
 
         plt.figure(figsize=(10, 3 * n_coeffs_to_plot))
         for i in range(n_coeffs_to_plot):
@@ -491,6 +774,9 @@ class PODAnalyzer(BaseAnalyzer):
 
         plt.figure(figsize=(8, 5))
         plt.plot(mode_indices, cumulative_energy, "o-", linewidth=2, markersize=6)
+        # Annotate cumulative curve with mode numbers
+        for idx, (x, y) in enumerate(zip(mode_indices, cumulative_energy)):
+            plt.text(x, y, f" {idx+1}", fontsize=7, va="bottom")
         plt.xlabel("Number of Modes")
         plt.ylabel("Cumulative Energy (%)")
         plt.title("Cumulative Energy of POD Modes")
@@ -531,6 +817,9 @@ class PODAnalyzer(BaseAnalyzer):
         mode_indices = np.arange(1, n_modes_check + 1)
         plt.figure(figsize=(8, 5))
         plt.plot(mode_indices, reconstruction_errors, "s-", linewidth=2, markersize=6)
+        # Annotate each reconstruction error point with mode number
+        for idx, (x, y) in enumerate(zip(mode_indices, reconstruction_errors)):
+            plt.text(x, y, f" {idx+1}", fontsize=7, va="bottom")
         plt.xlabel("Number of Modes Used for Reconstruction")
         plt.ylabel("Reconstruction Error (%)")
         plt.title("Data Reconstruction Error vs. Number of POD Modes")
@@ -759,7 +1048,10 @@ class PODAnalyzer(BaseAnalyzer):
 
         # Plotting
         self.plot_eigenvalues()
-        self.plot_modes(plot_n_modes=plot_n_modes_spatial)
+        # Detailed 4-panel mode plots (pairs with magnitude)
+        self.plot_modes_pair_detailed(plot_n_modes=plot_n_modes_spatial)
+        # New: comprehensive grid of modes up to cumulative energy threshold for easy DMD comparison
+        self.plot_modes_grid(energy_threshold=99.5)
         self.plot_time_coefficients(n_coeffs_to_plot=plot_n_coeffs_time)
         self.plot_cumulative_energy()
         self.plot_reconstruction_error()
@@ -825,8 +1117,19 @@ if __name__ == "__main__":
         )
         analyzer.data = data
         analyzer.analysis_type = f"pod_{field}"
-        analyzer.run_analysis(
-            plot_n_modes_spatial=n_modes_to_plot_spatial_main,
-            plot_n_coeffs_time=n_coeffs_to_plot_time_main,
-        )
+        if args.compute:
+            analyzer.run_analysis(
+                plot_n_modes_spatial=n_modes_to_plot_spatial_main,
+                plot_n_coeffs_time=n_coeffs_to_plot_time_main,
+            )
+        elif args.plot:
+            # Only load results and plot, do not recompute
+            analyzer.load_results()
+            analyzer.plot_eigenvalues()
+            analyzer.plot_modes_pair_detailed(plot_n_modes=n_modes_to_plot_spatial_main)
+            analyzer.plot_modes_grid(energy_threshold=99.7)
+            analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
+            analyzer.plot_cumulative_energy()
+            analyzer.plot_reconstruction_error()
+            analyzer.plot_reconstruction_comparison()
         print_summary("POD", analyzer.results_dir, analyzer.figures_dir)

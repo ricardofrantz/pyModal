@@ -123,9 +123,42 @@ class DMDAnalyzer(BaseAnalyzer):
             f.create_dataset("eigenvalues", data=self.eigenvalues, compression="gzip")
             f.create_dataset("modes", data=self.modes, compression="gzip")
             f.create_dataset("time_coefficients", data=self.time_coefficients, compression="gzip")
+            f.create_dataset("amplitudes", data=self.amplitudes, compression="gzip")
             f.create_dataset("x", data=self.data["x"], compression="gzip")
             f.create_dataset("y", data=self.data["y"], compression="gzip")
         print(f"DMD results saved to {path}")
+
+    def load_results(self, filename=None):
+        """Load DMD results from an HDF5 file."""
+        if not filename:
+            filename = make_result_filename(
+                self.data_root,
+                self.nfft,
+                self.overlap,
+                self.data.get("Ns", 0),
+                self.analysis_type,
+            )
+        path = os.path.join(self.results_dir, filename)
+        
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"DMD results file not found: {path}")
+        
+        with h5py.File(path, "r") as f:
+            self.eigenvalues = f["eigenvalues"][:]
+            self.modes = f["modes"][:]
+            self.time_coefficients = f["time_coefficients"][:]
+            # Load amplitudes if available (backward compatibility)
+            if "amplitudes" in f:
+                self.amplitudes = f["amplitudes"][:]
+            else:
+                # Calculate amplitudes from eigenvalues for backward compatibility
+                self.amplitudes = np.abs(self.eigenvalues)
+            # Load spatial coordinates if they exist
+            if "x" in f:
+                self.data["x"] = f["x"][:]
+            if "y" in f:
+                self.data["y"] = f["y"][:]
+        print(f"DMD results loaded from {path}")
 
     def plot_eigenvalues(self):
         """Plot DMD eigenvalues in the complex plane."""
@@ -288,6 +321,28 @@ class DMDAnalyzer(BaseAnalyzer):
                 # Add line contours only if range is significant
                 if vmax - vmin > 1e-12:
                     ax.contour(x_mesh, y_mesh, comp_plot, levels=levels[::4], colors="k", linewidths=0.4, alpha=0.4)
+                
+                # Add individual small colorbar inside the data area (upper right)
+                from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+                cax = inset_axes(ax, width="15%", height="6%", loc='upper right', borderpad=3)
+                cb = fig.colorbar(cf, cax=cax, orientation='horizontal', format="%.2f")
+                cb.ax.tick_params(labelsize=8, pad=1, colors='black')
+                cb.ax.xaxis.set_ticks_position('top')
+                cb.ax.xaxis.set_label_position('top')
+                # Set custom ticks: min, 0, max (except for magnitude which starts at 0)
+                if r == 2:  # magnitude
+                    cb.set_ticks([0, vmax/2, vmax])
+                    cb.set_ticklabels(['0', f'{vmax/2:.2f}', f'{vmax:.2f}'])
+                elif r == 3:  # phase
+                    cb.set_ticks([-np.pi, 0, np.pi])
+                    cb.set_ticklabels(['-π', '0', 'π'])
+                else:  # real and imaginary
+                    cb.set_ticks([vmin, 0, vmax])
+                    cb.set_ticklabels([f'{vmin:.2f}', '0', f'{vmax:.2f}'])
+                # Make colorbar background semi-transparent
+                cax.patch.set_facecolor('black')
+                cax.patch.set_alpha(0.7)
+                
                 # Cylinder overlay (always)
                 cylinder = plt.Circle((0, 0), 0.5, facecolor="lightgray", edgecolor="black", linewidth=0.5)
                 ax.add_patch(cylinder)
@@ -329,7 +384,7 @@ class DMDAnalyzer(BaseAnalyzer):
         plt.grid(True, which="both", ls="--")
         plt.ylim(0, 105)
         fname = os.path.join(self.figures_dir, f"{self.data_root}_dmd_cumulative_energy.png")
-        plt.savefig(fname, dpi=FIG_DPI)
+        plt.savefig(fname, dpi=FIG_DPI*0.8)
         plt.close()
         print(f"Saving figure {fname}")
 
@@ -520,13 +575,24 @@ if __name__ == "__main__":
             )
             analyzer.data = data
             analyzer.analysis_type = f"dmd_{field}"
-            analyzer.perform_dmd()
-            analyzer.save_results()
-            analyzer.plot_eigenspectra()
-            analyzer.plot_modes_detailed(plot_n_modes=n_modes_to_plot_spatial_main)
-            analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
-            analyzer.plot_cumulative_energy()
-            analyzer.plot_reconstruction_error()
+            
+            if args.plot:
+                # Only load results and plot, do not recompute
+                analyzer.load_results()
+                analyzer.plot_eigenspectra()
+                analyzer.plot_modes_detailed(plot_n_modes=n_modes_to_plot_spatial_main)
+                analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
+                analyzer.plot_cumulative_energy()
+                analyzer.plot_reconstruction_error()
+            else:
+                # Run full pipeline (default behavior when no arguments)
+                analyzer.perform_dmd()
+                analyzer.save_results()
+                analyzer.plot_eigenspectra()
+                analyzer.plot_modes_detailed(plot_n_modes=n_modes_to_plot_spatial_main)
+                analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
+                analyzer.plot_cumulative_energy()
+                analyzer.plot_reconstruction_error()
             print_summary("DMD", analyzer.results_dir, analyzer.figures_dir)
     else:
         # Fallback for legacy .mat/.h5 files
