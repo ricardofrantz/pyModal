@@ -45,8 +45,6 @@ from parallel_utils import print_optimization_status
 # Local application/library specific imports
 from utils import (
     BaseAnalyzer,
-    auto_detect_weight_type,  # If used in __main__
-    blocksfft,  # BSMD method description mentions qhat from Welch's method
     get_fig_aspect_ratio,
     get_num_threads,  # For detecting available CPU threads
     load_jetles_data,  # If used in __main__

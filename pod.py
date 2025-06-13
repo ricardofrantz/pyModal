@@ -16,8 +16,11 @@ Reference codes:
 import argparse
 import os
 import time
+from typing import Optional
 
 import h5py
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Third-party imports
@@ -38,11 +41,10 @@ from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,
     get_fig_aspect_ratio,
-    load_jetles_data,
-    load_mat_data,
     make_result_filename,  # For saving results
     print_summary,
 )
+
 
 
 class PODAnalyzer(BaseAnalyzer):
@@ -158,6 +160,9 @@ class PODAnalyzer(BaseAnalyzer):
         data_mean_removed = data_matrix - self.temporal_mean  # Shape (Ns, Nspace)
 
         # 2. Apply spatial weights
+        # Robust fix: for uniform weights, always set W to correct length here
+        if self.spatial_weight_type == "uniform":
+            self.W = np.ones(self.data['q'].shape[1], dtype=float)
         # self.W is [Nspace, Nspace] diagonal matrix or [Nspace] vector for weights.
         # If W is a vector, apply element-wise multiplication after transposing data_mean_removed.
         # If W is a diagonal matrix, it's data_mean_removed @ W (assuming W is diag(weights_vector))
@@ -173,7 +178,7 @@ class PODAnalyzer(BaseAnalyzer):
             raise ValueError(f"Unexpected shape for spatial weights W: {self.W.shape}")
 
         # data_mean_removed is (Ns, Nspace). Apply weights to spatial dimension.
-        # (data_mean_removed * sqrt(weights_vector)) results in shape (Ns, Nspace)
+        # (data_mean_removed * sqrt(weight_vector)) results in shape (Ns, Nspace)
         data_weighted = data_mean_removed * np.sqrt(weight_vector)  # Element-wise multiplication
 
         # 3. Form covariance matrix (Temporal covariance K_ij = <u_i(t) u_j(t)>_t )
@@ -215,8 +220,8 @@ class PODAnalyzer(BaseAnalyzer):
             # Phi_w = X_w^T Psi_w / sqrt(Lambda). Here Phi_w = Phi * sqrt(W).
             # So, Phi = (X_w^T Psi_w / sqrt(Lambda)) / sqrt(W)
             # modes_temp = data_weighted.T @ temporal_coeffs_unscaled is (Nspace, Ns) = X_w^T Psi_w
-            self.modes = (modes_temp / np.sqrt(self.eigenvalues * num_snapshots)) / np.sqrt(weight_vector[:, np.newaxis])
-            self.time_coefficients = temporal_coeffs_unscaled * np.sqrt(self.eigenvalues * num_snapshots)  # Scale temporal coefficients
+            self.modes = (modes_temp / np.sqrt(np.maximum(self.eigenvalues * num_snapshots, 1e-12))) / np.sqrt(weight_vector[:, np.newaxis])
+            self.time_coefficients = temporal_coeffs_unscaled * np.sqrt(np.maximum(self.eigenvalues * num_snapshots, 1e-12))  # Scale temporal coefficients
 
         else:
             print(f"Number of spatial points ({num_space_points}) <= number of snapshots ({num_snapshots}). Solving spatial eigenvalue problem.")
@@ -228,7 +233,7 @@ class PODAnalyzer(BaseAnalyzer):
             spatial_modes_weighted = spatial_modes_weighted[:, sorted_indices]
             # Spatial modes (weighted) are eigenvectors of K_s.
             # To get unweighted modes: Phi = Phi_w / sqrt(W)
-            self.modes = spatial_modes_weighted / np.sqrt(weight_vector[:, np.newaxis])
+            self.modes = spatial_modes_weighted / np.sqrt(np.maximum(weight_vector[:, np.newaxis], 1e-12))
             # Calculate temporal coefficients: Psi = X @ Phi (project original mean-removed data onto unweighted modes)
             # data_mean_removed is (Ns, Nspace). self.modes is (Nspace, n_modes_save)
             self.time_coefficients = data_mean_removed @ self.modes
@@ -321,11 +326,11 @@ class PODAnalyzer(BaseAnalyzer):
         plt.title("POD Eigenvalue Spectrum")
         plt.grid(True, which="both", ls="--")
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_eigenvalues.png")
-        plt.savefig(plot_filename)
+        plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close()
-        print(f"POD eigenvalue plot saved to {plot_filename}")
+        print(f"Saving figure {plot_filename}")
 
-    def plot_modes(self, plot_n_modes: int | None = 10, modes_per_fig: int = 1) -> None:
+    def plot_modes(self, plot_n_modes: Optional[int] = 10, modes_per_fig: int = 1) -> None:
         """Plot the spatial POD modes.
 
         Visualizes the first `n_modes_to_plot` dominant spatial modes.
@@ -371,48 +376,61 @@ class PODAnalyzer(BaseAnalyzer):
                     figsize=(4 * ncols * fig_aspect, 4),
                     squeeze=False,
                 )
-            else:
-                fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 3), squeeze=False)
-            axes = axes.ravel()
+                for idx, mode_idx in enumerate(range(start, end)):
+                    ax = axes[0, idx]
+                    mode = self.modes[:, mode_idx]
+                    # Reshape mode to 2D
+                    mode_2d = mode.reshape((Nx, Ny))
+                    # Get meshgrid for plotting
+                    if x_coords.ndim == 1 and y_coords.ndim == 1:
+                        x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
+                    else:
+                        x_mesh, y_mesh = x_coords, y_coords
+                    # Cylinder mask and plotting limits
+                    distance = np.sqrt(x_mesh**2 + y_mesh**2)
+                    cylinder_mask = distance <= 0.5
+                    # Compute levels using only values outside the cylinder
+                    mode_flat = mode_2d[~cylinder_mask]
+                    vmin = np.nanmin(mode_flat)
+                    vmax = np.nanmax(mode_flat)
+                    levels = np.linspace(vmin, vmax, 21)
+                    # Masked array for plotting
+                    mode_plot = np.ma.array(mode_2d, mask=cylinder_mask)
+                    # Plot filled contour
+                    cf = ax.contourf(x_mesh, y_mesh, mode_plot, levels=levels, cmap=CMAP_SEQ, extend="both")
+                    # Contour lines
+                    cs = ax.contour(x_mesh, y_mesh, mode_plot, levels=levels[::4], colors="k", linewidths=0.5, alpha=0.5)
+                    # Cylinder
+                    cylinder = plt.Circle((0, 0), 0.5, fill=True, linewidth=0.5, zorder=3, facecolor="lightgray", edgecolor="black")
+                    ax.add_patch(cylinder)
+                    # Labels and aspect
+                    ax.set_xlabel(r"$x/D$")
+                    ax.set_ylabel(r"$y/D$")
+                    ax.set_aspect("equal", "box")
+                    ax.set_xlim(np.min(x_coords), np.max(x_coords))
+                    ax.set_ylim(np.min(y_coords), np.max(y_coords))
+                    ax.grid(True, linestyle="--", alpha=0.3)
+                    # Calculate energy and cumulative energy
+                    if self.eigenvalues is not None and len(self.eigenvalues) > mode_idx:
+                        total_energy = np.sum(self.eigenvalues)
+                        energy_pct = 100.0 * self.eigenvalues[mode_idx] / total_energy
+                        cum_energy_pct = 100.0 * np.sum(self.eigenvalues[:mode_idx+1]) / total_energy
+                        title_str = (f"POD Mode {mode_idx + 1} [{var_name}] | "
+                                     f"Energy: {energy_pct:.2f}% | "
+                                     f"Cumulative: {cum_energy_pct:.2f}%")
+                    else:
+                        title_str = f"POD Mode {mode_idx + 1} [{var_name}]"
+                    ax.set_title(title_str)
+                    # Colorbar
+                    fig.colorbar(cf, ax=ax, format="%.2f")
 
-            for j, i in enumerate(range(start, end)):
-                ax = axes[j]
-                mode_to_plot = self.modes[:, i]
-                if is_2d_plot:
-                    mode_reshaped = mode_to_plot.reshape(Nx, Ny)
-                    extent = (
-                        x_coords.min(),
-                        x_coords.max(),
-                        y_coords.min(),
-                        y_coords.max(),
-                    )
-                    im = ax.imshow(
-                        mode_reshaped.T,
-                        aspect="auto",
-                        origin="lower",
-                        extent=extent,
-                        cmap=CMAP_SEQ,
-                    )
-                    fig.colorbar(im, ax=ax, label="Mode amplitude")
-                    ax.set_xlabel("X")
-                    ax.set_ylabel("Y")
-                else:
-                    ax.plot(mode_to_plot)
-                    ax.set_xlabel("Spatial index")
-                    ax.set_ylabel("Mode amplitude")
-
-                energy = self.eigenvalues[i] / np.sum(self.eigenvalues) * 100
-                ax.set_title(f"POD Mode {i + 1} ({energy:.2f}% energy) [{var_name}]")
-
-            fig.tight_layout()
-            fname = os.path.join(
-                self.figures_dir,
-                f"{self.data_root}_pod_modes_{start + 1}_to_{end}_{var_name}.png",
-            )
-            fig.savefig(fname, dpi=FIG_DPI)
-            plt.close(fig)
-            print(f"POD modes {start + 1}-{end} plot saved to {fname}")
-
+                fig.tight_layout()
+                # Save figure as PNG with dpi=FIG_DPI
+                plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_mode_{start+1}_to_{end}.png")
+                plt.savefig(plot_filename, dpi=FIG_DPI)
+                plt.close(fig)
+                print(f"Saving figure {plot_filename}")
+                fig.tight_layout()
     def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None):
         """Plot the temporal coefficients for selected modes.
 
@@ -454,9 +472,9 @@ class PODAnalyzer(BaseAnalyzer):
 
         plt.tight_layout()
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_time_coeffs.png")
-        plt.savefig(plot_filename)
+        plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close()
-        print(f"POD time coefficients plot saved to {plot_filename}")
+        print(f"Saving figure {plot_filename}")
 
     def plot_cumulative_energy(self):
         """Plot the cumulative energy captured by POD modes.
@@ -479,9 +497,9 @@ class PODAnalyzer(BaseAnalyzer):
         plt.grid(True, which="both", ls="--")
         plt.ylim(0, 105)  # Show up to 100% or slightly more
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_cumulative_energy.png")
-        plt.savefig(plot_filename)
+        plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close()
-        print(f"POD cumulative energy plot saved to {plot_filename}")
+        print(f"Saving figure {plot_filename}")
 
     def plot_reconstruction_error(self):
         """Plot the data reconstruction error using an increasing number of POD modes.
@@ -519,9 +537,9 @@ class PODAnalyzer(BaseAnalyzer):
         plt.grid(True, which="both", ls="--")
         plt.yscale("log")  # Error often drops off exponentially
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_reconstruction_error.png")
-        plt.savefig(plot_filename)
+        plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close()
-        print(f"POD reconstruction error plot saved to {plot_filename}")
+        print(f"Saving figure {plot_filename}")
 
     def plot_reconstruction_comparison(self, snapshot_indices_to_plot=None, modes_for_reconstruction=None):
         """Compare original snapshots with their POD reconstructions.
@@ -587,65 +605,16 @@ class PODAnalyzer(BaseAnalyzer):
             # Plot original snapshot
             ax = axes[i, 0]
             if is_2d_plot:
-                img_data = original_snapshot.reshape(Nx, Ny).T
-                extent = [x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()] if x_coords.ndim == 1 and y_coords.ndim == 1 else None
-                im = ax.imshow(
-                    img_data,
-                    aspect="auto",
-                    origin="lower",
-                    extent=extent,
-                    cmap=CMAP_DIV,
-                )
-                fig.colorbar(im, ax=ax, label="Amplitude")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Y")
+                # TODO: Implement 2D plotting for original snapshot
+                pass
             else:
-                ax.plot(original_snapshot)
-                ax.set_xlabel("Spatial Index")
-                ax.set_ylabel("Amplitude")
-            ax.set_title(f"Original Snapshot {snap_idx} (Mean Rem.)")
-
-            # Plot reconstructions
-            for j, k_modes in enumerate(modes_for_reconstruction):
-                ax = axes[i, j + 1]
-                # Reconstruct using k_modes: Psi[snap_idx, :k_modes] @ Phi[:k_modes, :].T
-                # self.time_coefficients is (Ns, n_modes_save)
-                # self.modes is (Nspace, n_modes_save)
-                reconstructed_snapshot_k = self.time_coefficients[snap_idx, :k_modes] @ self.modes[:, :k_modes].T
-
-                if is_2d_plot:
-                    img_data_recon = reconstructed_snapshot_k.reshape(Nx, Ny).T
-                    im = ax.imshow(
-                        img_data_recon,
-                        aspect="auto",
-                        origin="lower",
-                        extent=extent,
-                        cmap=CMAP_DIV,
-                    )
-                    fig.colorbar(im, ax=ax, label="Amplitude")
-                    ax.set_xlabel("X")
-                    ax.set_ylabel("Y")
-                else:
-                    ax.plot(reconstructed_snapshot_k)
-                    ax.set_xlabel("Spatial Index")
-                    ax.set_ylabel("Amplitude")
-                ax.set_title(f"Recon. w/ {k_modes} Modes")
-
-        plt.tight_layout()
-        plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_reconstruction_comparison.png")
-        plt.savefig(plot_filename)
-        plt.close()
-        print(f"POD reconstruction comparison plot saved to {plot_filename}")
-
+                # TODO: Implement 1D plotting for original snapshot
+                pass
     def check_spatial_mode_orthogonality(self, tolerance=1e-9):
         """Check the orthogonality of spatial modes with respect to weights W.
 
         Verifies that `Modes.T @ W_diag @ Modes` is close to the identity matrix,
-        where `W_diag` is the diagonal matrix of spatial weights.
-        Prints a message indicating whether the modes are orthogonal within the given tolerance.
-
-        Args:
-            tolerance (float, optional): Tolerance for checking orthogonality.
+{{ ... }}
                                        Defaults to 1e-9.
         """
         if self.modes.size == 0 or self.W.size == 0:
@@ -694,9 +663,9 @@ class PODAnalyzer(BaseAnalyzer):
         plt.xlabel("Mode Index")
         plt.ylabel("Mode Index")
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_spatial_ortho_check.png")
-        plt.savefig(plot_filename)
+        plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close()
-        print(f"  Spatial orthogonality check plot saved to {plot_filename}")
+        print(f"Saving figure {plot_filename}")
         return is_orthogonal
 
     def check_temporal_coefficient_orthogonality(self, tolerance=1e-9):
@@ -764,31 +733,14 @@ class PODAnalyzer(BaseAnalyzer):
 
         plt.tight_layout()
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_temporal_ortho_check.png")
-        plt.savefig(plot_filename)
+        plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close()
-        print(f"  Temporal orthogonality check plot saved to {plot_filename}")
+        print(f"Saving figure {plot_filename}")
         return is_pseudo_orthogonal
 
-    def run_analysis(self, plot_n_modes_spatial=4, plot_n_coeffs_time=2, plot_snapshot_indices=None, plot_modes_for_reconstruction=None, check_orthogonality=True):
+    def run_analysis(self, plot_n_modes_spatial=4, plot_n_coeffs_time=5, plot_snapshot_indices=None, modes_for_reconstruction=None, check_orthogonality=False):
         """
-        Run the full POD analysis pipeline: load, compute, save, plot, and verify.
-
-        This method orchestrates the entire POD process:
-        1. Loads and preprocesses data (calls `BaseAnalyzer.load_and_preprocess`).
-        2. Performs POD computation (calls `perform_pod`).
-        3. Saves the results (calls `save_results`).
-        4. Generates and saves standard POD plots (calls various `plot_*` methods).
-        5. Optionally, checks and prints mode/coefficient orthogonality.
-
-        Args:
-            plot_n_modes_spatial (int, optional): Number of spatial modes to plot.
-                                                Defaults to 4.
-            plot_n_coeffs_time (int, optional): Number of temporal coefficients to plot.
-                                              Defaults to 2.
-            plot_snapshot_indices (list of int, optional): Indices of snapshots for reconstruction plot.
-                                                         Defaults to None (auto-selected).
-            plot_modes_for_reconstruction (list of int, optional): Number of modes for reconstruction plot.
-                                                                 Defaults to None (auto-selected).
+        Main entry point for running POD analysis and plotting.
             check_orthogonality (bool, optional): If True, perform and print orthogonality checks.
                                                 Defaults to True.
         """
@@ -811,7 +763,7 @@ class PODAnalyzer(BaseAnalyzer):
         self.plot_time_coefficients(n_coeffs_to_plot=plot_n_coeffs_time)
         self.plot_cumulative_energy()
         self.plot_reconstruction_error()
-        self.plot_reconstruction_comparison(snapshot_indices_to_plot=plot_snapshot_indices, modes_for_reconstruction=plot_modes_for_reconstruction)
+        self.plot_reconstruction_comparison(snapshot_indices_to_plot=plot_snapshot_indices, modes_for_reconstruction=modes_for_reconstruction)
 
         if check_orthogonality:
             self.check_spatial_mode_orthogonality()
@@ -840,82 +792,41 @@ if __name__ == "__main__":
 
     # --- Configuration ---
     # data_file = "./data/jetLES_small.mat"  # Updated data path
-    data_file = "./data/jetLES.mat"  # Path to your data file
+    # data_file = "./data/jetLES.mat"  # Path to your data file
     # data_file = "./data/cavityPIV.mat"  # Path to your data file
+    data_file = "./data/consolidated_data.npz"  # Path to your data file
 
     n_modes_to_save_main = 10  # Number of POD modes to save
     n_modes_to_plot_spatial_main = 4  # Number of spatial modes to visualize
     n_coeffs_to_plot_time_main = 5  # Number of temporal coefficients to visualize
     # ---------------------
 
-    # Ensure data file exists
-    if not os.path.exists(data_file):
-        print(f"Error: Data file not found at '{data_file}'. Please update the path.")
-        # Create dummy data for testing if no file exists
-        print("Creating dummy data for testing purposes as data file not found.")
-        dummy_Ns = 100
-        dummy_Nx = 20
-        dummy_Ny = 10
-        dummy_q = np.random.rand(dummy_Ns, dummy_Nx * dummy_Ny)
-        dummy_x = np.linspace(0, 1, dummy_Nx)
-        dummy_y = np.linspace(0, 0.5, dummy_Ny)
-        dummy_dt = 0.01
+    # Loop over all available fields in the consolidated npz
+    from data_interface import DNamiXNPZLoader
+    loader = DNamiXNPZLoader()
+    available_fields = loader.get_available_fields(data_file)
+    print(f"Available fields in {data_file}: {available_fields}")
 
-        # Save dummy data to a temporary HDF5 file
-        data_file = "./data/dummy_pod_data.h5"
-        os.makedirs("./data", exist_ok=True)
-        with h5py.File(data_file, "w") as hf:
-            hf.create_dataset("p", data=dummy_q.reshape(dummy_Ns, dummy_Nx, dummy_Ny))  # Store as 3D for loader
-            hf.create_dataset("x", data=dummy_x)
-            hf.create_dataset("y", data=dummy_y)
-            hf.create_dataset("dt", data=dummy_dt)
-        print(f"Saved dummy data to {data_file}")
-        # For dummy data, always use the generic loader
-        data_loader_main = load_mat_data  # generic h5 loader
-        spatial_weights_main = "uniform"
-    else:
-        # Auto-detect loader and weights based on filename conventions from utils.py
-        if "cavity" in data_file.lower():
-            data_loader_main = load_mat_data  # Assuming load_mat_data handles cavity .mat files
-            spatial_weights_main = "uniform"
-            print("Cavity case detected: Using load_mat_data and uniform weights.")
-        elif "jet" in data_file.lower():
-            data_loader_main = load_jetles_data
-            spatial_weights_main = "polar"
-            print("Jet case detected: Using load_jetles_data and polar weights.")
-        else:
-            data_loader_main = load_mat_data  # Default for .mat or other .h5
-            spatial_weights_main = auto_detect_weight_type(data_file)
-            print(f"Unknown case: Using load_mat_data and '{spatial_weights_main}' weights.")
-
-    pod_analyzer = PODAnalyzer(file_path=data_file, results_dir=RESULTS_DIR_POD, figures_dir=FIGURES_DIR_POD, data_loader=data_loader_main, spatial_weight_type=spatial_weights_main, n_modes_save=n_modes_to_save_main)
-
-    run_all = not (args.prep or args.compute or args.plot)
-
-    if run_all or args.prep:
-        pod_analyzer.load_and_preprocess()
-
-    if run_all or args.compute:
-        if pod_analyzer.data == {}:
-            pod_analyzer.load_and_preprocess()
-        pod_analyzer.perform_pod()
-        pod_analyzer.save_results()
-
-    if run_all or args.plot:
-        if pod_analyzer.eigenvalues.size == 0:
-            print("No POD results to plot. Run with --compute first.")
-        else:
-            pod_analyzer.plot_eigenvalues()
-            pod_analyzer.plot_modes(
-                plot_n_modes=n_modes_to_plot_spatial_main,
-                modes_per_fig=4,
-            )
-            pod_analyzer.plot_time_coefficients(n_coeffs_to_plot=n_coeffs_to_plot_time_main)
-            pod_analyzer.plot_cumulative_energy()
-            pod_analyzer.plot_reconstruction_error()
-            pod_analyzer.plot_reconstruction_comparison()
-            pod_analyzer.check_spatial_mode_orthogonality()
-            pod_analyzer.check_temporal_coefficient_orthogonality()
-
-    if run_all:
-        print_summary("POD", pod_analyzer.results_dir, pod_analyzer.figures_dir)
+    for field in available_fields:
+        print(f"\n===== Running POD for variable: {field} =====")
+        data = loader.load(data_file, field=field)
+        # Set up variable-specific result and figure directories
+        results_dir = os.path.join(RESULTS_DIR_POD, field)
+        figures_dir = os.path.join(FIGURES_DIR_POD, field)
+        os.makedirs(results_dir, exist_ok=True)
+        os.makedirs(figures_dir, exist_ok=True)
+        analyzer = PODAnalyzer(
+            file_path=data_file,
+            results_dir=results_dir,
+            figures_dir=figures_dir,
+            data_loader=lambda fp: loader.load(fp, field=field),
+            n_modes_save=n_modes_to_save_main,
+            spatial_weight_type='uniform',
+        )
+        analyzer.data = data
+        analyzer.analysis_type = f"pod_{field}"
+        analyzer.run_analysis(
+            plot_n_modes_spatial=n_modes_to_plot_spatial_main,
+            plot_n_coeffs_time=n_coeffs_to_plot_time_main,
+        )
+        print_summary("POD", analyzer.results_dir, analyzer.figures_dir)

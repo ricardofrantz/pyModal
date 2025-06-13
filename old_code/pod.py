@@ -30,8 +30,7 @@ from utils import (
     BaseAnalyzer,
     auto_detect_weight_type,
     load_jetles_data,
-    load_mat_data,
-    make_result_filename,  # For saving results
+    load_mat_data,  # For saving results
 )
 
 

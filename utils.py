@@ -5,19 +5,22 @@ Common utilities for modal decomposition methods.
 All imports are centralized here to keep the code clean and consistent.
 """
 
+import os
+import numpy as np
+import h5py
+import time
+
 from configs import *
 from data_interface import auto_detect_weight_type as di_auto_detect_weight_type
 from data_interface import load_data as di_load_data
 from data_interface import load_jetles_data as di_load_jetles_data
 from data_interface import load_mat_data as di_load_mat_data
 from fft.fft_backends import get_fft_func
-
 try:
     from parallel_utils import (
         PARALLEL_AVAILABLE,
         blocksfft_optimized,
         calculate_polar_weights_optimized,
-        pod_computation_optimized,
         spod_single_frequency_optimized,
     )
 except Exception:
@@ -83,7 +86,9 @@ def compute_aspect_ratio(x_coords, y_coords):
     return "auto"
 
 
-def get_aspect_ratio(data: dict) -> float | str:
+from typing import Union
+
+def get_aspect_ratio(data: dict) -> Union[float, str]:
     """Return aspect ratio for ``data`` using available coordinates."""
     x = data.get("x", [])
     y = data.get("y", [])
@@ -356,7 +361,11 @@ def blocksfft(
 
 
 def auto_detect_weight_type(file_path):
+    # Always return 'uniform' for dNamiX consolidated .npz files
+    if file_path.lower().endswith('.npz'):
+        return 'uniform'
     return di_auto_detect_weight_type(file_path)
+
 
 
 def spod_function(qhat, nblocks, dst, w, return_psi=False, use_parallel=True):

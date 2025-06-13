@@ -17,10 +17,8 @@ This is essential for workflows where simulation outputs are not at constant dt,
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline, Akima1DInterpolator, interp1d, splrep, splev
-from scipy.fft import rfft, rfftfreq
 from complex_signal import generate_complex_signal
 from tabulate import tabulate
-import pandas as pd
 
 def variable_time_steps(T, base_dt, variability=0.1):
     times = [0]

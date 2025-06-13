@@ -174,7 +174,7 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12.8*size_factor, 8*size_factor), 
 
 # Plot the original signal
 ax1.plot(t, x)
-ax1.set_title(f'Signal with Harmonics and Modulation')
+ax1.set_title('Signal with Harmonics and Modulation')
 ax1.set_xlabel('t')
 ax1.set_ylabel('Amp.')
 

@@ -30,15 +30,12 @@ import matplotlib.pyplot as plt
 
 # Third-party imports
 import numpy as np
-import scipy.linalg as eig
 
 from configs import FIGURES_DIR, RESULTS_DIR
 
 # Local application/library specific imports
 from utils import (
     BaseAnalyzer,
-    auto_detect_weight_type,  # If used in __main__
-    blocksfft,  # BSMD method description mentions qhat from Welch's method
     load_jetles_data,  # If used in __main__
     load_mat_data,  # If used in __main__
     make_result_filename,  # For saving results

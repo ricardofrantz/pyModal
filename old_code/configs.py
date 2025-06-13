@@ -5,19 +5,8 @@ NOTE: ALL imports are available here and this is imported in utils.py
 so we only need to import utils in other files.
 """
 
-import glob
-import json
 import os
-import re
-import time
 
-import h5py
-import matplotlib.pyplot as plt
-import numpy as np
-import scipy.linalg
-from scipy.linalg import eig
-from scipy.signal import find_peaks
-from tqdm import tqdm
 
 os.environ["OS_ACTIVITY_MODE"] = "disable"  # suppress macOS IMKClient logs
 """

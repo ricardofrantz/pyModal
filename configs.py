@@ -5,19 +5,9 @@ NOTE: ALL imports are available here and this is imported in utils.py
 so we only need to import utils in other files.
 """
 
-import glob
 import json
 import os
-import re
-import time
-from concurrent.futures import ThreadPoolExecutor
 
-import h5py
-import matplotlib.pyplot as plt
-import numpy as np
-import scipy.linalg
-from scipy.linalg import eig
-from scipy.signal import find_peaks, get_window
 
 os.environ["OS_ACTIVITY_MODE"] = "disable"  # suppress macOS IMKClient logs
 """
@@ -47,7 +37,7 @@ PREPROCESS_DIR_BSMD = "./preprocess_bsmd"
 PREPROCESS_DIR_DMD = "./preprocess_dmd"
 
 # Figure saving options
-FIG_DPI = 300
+FIG_DPI = 500
 FIG_FORMAT = "png"  # or "pdf"
 
 # FFT backend selection. Options include:

@@ -1,7 +1,5 @@
 # Standard library imports
 import argparse
-import glob
-import json
 import os
 import time
 
@@ -11,7 +9,6 @@ import matplotlib.pyplot as plt
 
 # Third-party imports
 import numpy as np
-from scipy.signal import find_peaks
 from tqdm import tqdm
 
 from configs import (

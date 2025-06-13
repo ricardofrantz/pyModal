@@ -295,9 +295,100 @@ class DataInterfaceManager:
             MATDataLoader(),
             HDF5DataLoader(), 
             CGNSDataLoader(),
+            DNamiXNPZLoader(),
             # Add new loaders here in the future
         ]
+
+    def load_data(self, file_path: str, loader_type: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Load data using automatic format detection or specified loader.
+        Parameters:
+        -----------
+        file_path : str
+            Path to the data file
+        loader_type : str, optional
+            Force specific loader ('mat', 'hdf5', 'cgns')
+        Returns:
+        --------
+        dict
+            Standardized data format for all analysis methods
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Data file not found: {file_path}")
+        # If specific loader requested
+        if loader_type:
+            loader_map = {
+                'mat': MATDataLoader,
+                'hdf5': HDF5DataLoader,
+                'cgns': CGNSDataLoader,
+                'dnamiX_npz': DNamiXNPZLoader,
+            }
+            if loader_type not in loader_map:
+                raise ValueError(f"Unknown loader type: {loader_type}")
+            loader = loader_map[loader_type]()
+            return loader.load(file_path)
+        # Auto-detect format
+        for loader in self.loaders:
+            if loader.supports_format(file_path):
+                return loader.load(file_path)
+        # No suitable loader found
+        file_ext = os.path.splitext(file_path)[1].lower()
+        supported_formats = ['.mat', '.h5', '.hdf5', '.cgns', '.npz']
+        raise ValueError(
+            f"No loader found for file extension '{file_ext}'. "
+            f"Supported formats: {supported_formats}"
+        )
     
+class DNamiXNPZLoader(DataLoader):
+    """Loader for dNamiX consolidated .npz files (output of interp_cart.py consolidation)."""
+    def supports_format(self, file_path: str) -> bool:
+        return file_path.lower().endswith('.npz')
+
+    def get_available_fields(self, file_path: str):
+        npz = np.load(file_path)
+        return [k for k in ("u", "v", "p") if k in npz]
+
+    def load(self, file_path: str, field: str = None) -> Dict[str, Any]:
+        print(f"📂 Loading dNamiX consolidated .npz data from {file_path}")
+        npz = np.load(file_path)
+        x = npz["x"]
+        y = npz["y"]
+        times = npz["times"]
+        available_fields = [k for k in ("u", "v", "p") if k in npz]
+        # Default order: u, v, p
+        if field is None:
+            for candidate in ["u", "v", "p"]:
+                if candidate in npz:
+                    field = candidate
+                    break
+        if field not in available_fields:
+            raise KeyError(f"Requested field '{field}' not found in npz file. Available: {available_fields}")
+        arr = npz[field]
+        Ns = times.shape[0]
+        Nx, Ny = arr.shape[1], arr.shape[2]
+        Nz = 1
+        q = arr.reshape(Ns, Nx * Ny)
+        dt = float(times[1] - times[0]) if len(times) > 1 else 1.0
+        print(f"   Processed shape: q={q.shape}, Nx={Nx}, Ny={Ny}, Ns={Ns}, dt={dt}, field={field}")
+        return {
+            'q': q,
+            'x': x,
+            'y': y,
+            'z': None,
+            'dt': dt,
+            'Nx': Nx,
+            'Ny': Ny,
+            'Nz': Nz,
+            'Ns': Ns,
+            'metadata': {
+                'format': 'dnamiX_npz',
+                'original_shape': arr.shape,
+                'file_path': file_path,
+                'var_name': field,
+                'available_fields': available_fields,
+            }
+        }
+
     def load_data(self, file_path: str, loader_type: Optional[str] = None) -> Dict[str, Any]:
         """
         Load data using automatic format detection or specified loader.
@@ -345,28 +436,16 @@ class DataInterfaceManager:
     
     def get_weight_type(self, data: Dict[str, Any], file_path: str) -> str:
         """
-        Determine appropriate spatial weight type based on data characteristics.
-        
-        Parameters:
-        -----------
-        data : dict
-            Loaded data dictionary
-        file_path : str
-            Original file path for heuristics
-            
-        Returns:
-        --------
-        str
-            Weight type ('uniform', 'polar', 'custom')
+        Always return 'uniform' for dNamiX consolidated .npz files (Cartesian mesh), else use legacy logic.
         """
-        # Use existing heuristics but make them more robust
+        if file_path.lower().endswith('.npz') or data.get('metadata', {}).get('format') == 'dnamiX_npz':
+            return 'uniform'
+        # --- legacy/other logic ---
         if "cavity" in file_path.lower():
             return "uniform"
         elif "jet" in file_path.lower() or data['metadata'].get('format') == 'hdf5_jetles':
             return "polar"
         else:
-            # Could add more sophisticated detection based on coordinate structure
-            # For now, default to uniform for unknown formats
             return "uniform"
     
     def list_supported_formats(self) -> Dict[str, str]:
@@ -394,6 +473,7 @@ def load_data(file_path: str, loader_type: Optional[str] = None) -> Dict[str, An
 def get_weight_type(data: Dict[str, Any], file_path: str) -> str:
     """Convenience function for determining weight type."""
     return data_manager.get_weight_type(data, file_path)
+
 
 
 # Legacy compatibility functions - these maintain backward compatibility

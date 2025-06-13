@@ -9,10 +9,7 @@ Author: Modal Decomposition Team
 """
 
 import numpy as np
-import os
 import multiprocessing
-import warnings
-from typing import Optional, Tuple, Union
 
 # Try to detect OpenMP availability
 OPENMP_AVAILABLE = False

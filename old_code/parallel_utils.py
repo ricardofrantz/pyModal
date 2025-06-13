@@ -12,10 +12,7 @@ import numpy as np
 import os
 import multiprocessing
 from numba import jit, prange, config
-import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import partial
-from typing import Optional, Tuple, Union
 
 # Configure Numba for OpenMP
 config.THREADING_LAYER = 'omp'
@@ -238,7 +235,7 @@ def parallel_blocksfft(q, nfft, nblocks, novlap, blockwise_mean=False, normvar=F
             iblk, result = future.result()
             q_hat[:, :, iblk] = result
     
-    print(f"✅ FFT block processing completed")
+    print("✅ FFT block processing completed")
     return q_hat
 
 
@@ -371,7 +368,7 @@ def parallel_spod_frequency_loop(qhat, nblocks, dst, W, n_workers=None, return_p
                 phi_all[freq_idx] = phi
                 lambda_all[freq_idx] = lambda_vals
     
-    print(f"✅ SPOD frequency loop completed")
+    print("✅ SPOD frequency loop completed")
     
     if return_psi:
         return phi_all, lambda_all, psi_all
@@ -498,7 +495,7 @@ def parallel_reconstruction_error(time_coeffs, modes, data_mean_removed, n_modes
     sorted_pairs = sorted(zip(mode_numbers, errors))
     mode_numbers, errors = zip(*sorted_pairs)
     
-    print(f"✅ Reconstruction error computation completed")
+    print("✅ Reconstruction error computation completed")
     return np.array(mode_numbers), np.array(errors)
 
 
