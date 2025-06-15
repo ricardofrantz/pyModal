@@ -55,7 +55,8 @@ class MATDataLoader(DataLoader):
     
     def load(self, file_path: str, preview_ns: int = None) -> Dict[str, Any]:
         """Load data from .mat file with flexible variable detection. Optionally, only load first preview_ns snapshots."""
-        print(f"📂 Loading .mat data from {file_path}")
+        file_size = format_file_size(file_path)
+        print(f"📂 Loading .mat data from {file_path} ({file_size})")
         
         with h5py.File(file_path, "r") as fread:
             # Try common variable names for the main field
@@ -208,7 +209,8 @@ class HDF5DataLoader(DataLoader):
     
     def load(self, file_path: str) -> Dict[str, Any]:
         """Load data from HDF5 file with JetLES format."""
-        print(f"📂 Loading HDF5/JetLES data from {file_path}")
+        file_size = format_file_size(file_path)
+        print(f"📂 Loading HDF5/JetLES data from {file_path} ({file_size})")
         
         with h5py.File(file_path, "r") as fread:
             # JetLES format specifics
@@ -252,7 +254,8 @@ class CGNSDataLoader(DataLoader):
     
     def load(self, file_path: str) -> Dict[str, Any]:
         """Load data from CGNS file."""
-        print(f"📂 Loading CGNS data from {file_path}")
+        file_size = format_file_size(file_path)
+        print(f"📂 Loading CGNS data from {file_path} ({file_size})")
         
         # TODO: Implement CGNS loading using python-cgns or similar
         # This is where you'll add CGNS support later
@@ -349,7 +352,8 @@ class DNamiXNPZLoader(DataLoader):
         return [k for k in ("u", "v", "p") if k in npz]
 
     def load(self, file_path: str, field: str = None) -> Dict[str, Any]:
-        print(f"📂 Loading dNamiX consolidated .npz data from {file_path}")
+        file_size = format_file_size(file_path)
+        print(f"📂 Loading npz data from {file_path} ({file_size})")
         npz = np.load(file_path)
         x = npz["x"]
         y = npz["y"]
@@ -455,6 +459,17 @@ class DNamiXNPZLoader(DataLoader):
             '.h5/.hdf5': 'HDF5 format (including JetLES)',
             '.cgns': 'CGNS format (future implementation)',
         }
+
+
+def format_file_size(file_path: str) -> str:
+    """Format file size in human-readable format (MB or GB)."""
+    size_bytes = os.path.getsize(file_path)
+    size_mb = size_bytes / (1024 * 1024)
+    if size_mb >= 1024:
+        size_gb = size_mb / 1024
+        return f"{size_gb:.1f} GB"
+    else:
+        return f"{size_mb:.1f} MB"
 
 
 # Global instance for easy access

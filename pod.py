@@ -1074,6 +1074,11 @@ if __name__ == "__main__":
     parser.add_argument("--compute", action="store_true", help="Perform POD and save results")
     parser.add_argument("--plot", action="store_true", help="Generate default plots")
     args = parser.parse_args()
+    
+    # If no arguments are provided, run the full analysis (compute + plot)
+    if not any([args.prep, args.compute, args.plot]):
+        args.compute = True
+        args.plot = True
 
     print_optimization_status()
 
@@ -1122,9 +1127,10 @@ if __name__ == "__main__":
                 plot_n_modes_spatial=n_modes_to_plot_spatial_main,
                 plot_n_coeffs_time=n_coeffs_to_plot_time_main,
             )
-        elif args.plot:
-            # Only load results and plot, do not recompute
-            analyzer.load_results()
+        if args.plot:
+            # Only load results if we haven't already computed them
+            if not args.compute:
+                analyzer.load_results()
             analyzer.plot_eigenvalues()
             analyzer.plot_modes_pair_detailed(plot_n_modes=n_modes_to_plot_spatial_main)
             analyzer.plot_modes_grid(energy_threshold=99.7)

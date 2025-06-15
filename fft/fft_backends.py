@@ -109,16 +109,16 @@ FFT_BACKENDS = {
     # Additional backends are appended below when available
 }
 
-try:
-    import pyfftw  # Attempt to import to check availability
+# try:
+#     import pyfftw  # Attempt to import to check availability
 
-    FFT_BACKENDS["pyfftw"] = _pyfftw_fft_impl
-    # print("PyFFTW backend enabled.")
-except ImportError:
-    print("PyFFTW not installed or found. PyFFTW backend will be unavailable.")
-except Exception as e:
-    # Catch any other error during PyFFTW probing/loading
-    print(f"Error loading PyFFTW backend: {e}. PyFFTW backend will be unavailable.")
+#     FFT_BACKENDS["pyfftw"] = _pyfftw_fft_impl
+#     # print("PyFFTW backend enabled.")
+# # except ImportError:
+# #     print("PyFFTW not installed or found. PyFFTW backend will be unavailable.")
+# # except Exception as e:
+# #     # Catch any other error during PyFFTW probing/loading
+# #     print(f"Error loading PyFFTW backend: {e}. PyFFTW backend will be unavailable.")
 
 
 def get_fft_func(backend=None):
