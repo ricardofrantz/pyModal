@@ -761,6 +761,90 @@ class PODAnalyzer(BaseAnalyzer):
         plt.close()
         print(f"Saving figure {plot_filename}")
 
+    def check_mode_pair_phase(self, start_mode: int = 1, threshold: float = 0.9):
+        """Identify mode pairs with strongly correlated time coefficients.
+
+        Starting from ``start_mode`` (1-indexed), iterate through the saved POD
+        modes and compute the Pearson correlation coefficient between the time
+        coefficients of mode ``i`` and candidate mode ``j``.  If the absolute
+        value of the correlation exceeds ``threshold`` the pair ``(i, j)`` is
+        considered a valid phase pair and is yielded.  If the correlation is
+        below the threshold the search continues with ``j`` incremented until a
+        suitable partner for mode ``i`` is found or the available modes are
+        exhausted.
+
+        Parameters
+        ----------
+        start_mode : int, optional
+            First mode index to test (1-indexed).  Defaults to ``1``.
+        threshold : float, optional
+            Minimum absolute correlation required to accept a pair.  A value of
+            ``1.0`` would require perfectly correlated time coefficients while a
+            value of ``0`` would accept any pair.  Defaults to ``0.9``.
+
+        Yields
+        ------
+        tuple[int, int]
+            Mode index pairs that satisfy the correlation criterion.
+        """
+
+        if self.time_coefficients.size == 0:
+            print("No time coefficients available. Run perform_pod() first.")
+            return
+
+        n_modes = self.time_coefficients.shape[1]
+        i = start_mode
+        while i < n_modes:
+            found = False
+            for j in range(i + 1, n_modes + 1):
+                coeff_i = self.time_coefficients[:, i - 1]
+                coeff_j = self.time_coefficients[:, j - 1]
+                corr = np.corrcoef(coeff_i, coeff_j)[0, 1]
+                if np.abs(corr) >= threshold:
+                    print(f"Found correlated pair ({i}, {j}) with r={corr:.3f}")
+                    yield (i, j)
+                    i = j + 1
+                    found = True
+                    break
+            if not found:
+                print(f"No correlated partner found for mode {i}")
+                i += 1
+
+    def plot_mode_pair_phase(self, start_mode: int = 1, threshold: float = 0.9):
+        """Plot phase portraits of automatically detected mode pairs.
+
+        Mode pairs are identified using :meth:`check_mode_pair_phase`.  For each
+        accepted pair the temporal coefficients of the two modes are plotted
+        against each other to visualize their phase relationship.
+
+        Parameters
+        ----------
+        start_mode : int, optional
+            Initial mode index to search from.  Defaults to ``1``.
+        threshold : float, optional
+            Correlation threshold passed to :meth:`check_mode_pair_phase`.
+            Defaults to ``0.9``.
+        """
+
+        pairs = list(self.check_mode_pair_phase(start_mode=start_mode, threshold=threshold))
+        if not pairs:
+            print("No mode pairs met the correlation threshold.")
+            return
+
+        for i, j in pairs:
+            coeff_i = self.time_coefficients[:, i - 1]
+            coeff_j = self.time_coefficients[:, j - 1]
+            plt.figure(figsize=(5, 5))
+            plt.plot(coeff_i, coeff_j, "o-", markersize=3, linewidth=0.8)
+            plt.xlabel(f"Coefficient {i}")
+            plt.ylabel(f"Coefficient {j}")
+            plt.title(f"POD Phase Portrait Modes {i} & {j}")
+            plt.grid(True)
+            fname = os.path.join(self.figures_dir, f"{self.data_root}_pod_phase_pair_{i}_{j}.png")
+            plt.savefig(fname, dpi=FIG_DPI)
+            plt.close()
+            print(f"Saving figure {fname}")
+
     def plot_cumulative_energy(self):
         """Plot the cumulative energy captured by POD modes.
 
@@ -1046,6 +1130,9 @@ class PODAnalyzer(BaseAnalyzer):
         # Perform POD
         self.perform_pod()
 
+        # Identify correlated mode pairs before plotting
+        list(self.check_mode_pair_phase())
+
         # Save results
         self.save_results()  # This already calls super().save_results()
 
@@ -1053,6 +1140,8 @@ class PODAnalyzer(BaseAnalyzer):
         self.plot_eigenvalues()
         # Detailed 4-panel mode plots (pairs with magnitude)
         self.plot_modes_pair_detailed(plot_n_modes=plot_n_modes_spatial)
+        # Phase portraits for correlated pairs
+        self.plot_mode_pair_phase()
         # New: comprehensive grid of modes up to cumulative energy threshold for easy DMD comparison
         self.plot_modes_grid(energy_threshold=99.5)
         self.plot_time_coefficients(n_coeffs_to_plot=plot_n_coeffs_time)
