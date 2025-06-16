@@ -34,6 +34,12 @@ from utils import (
     spod_function,  # Core SPOD routine for SPODAnalyzer
 )
 
+# Try to import DNamiXNPZLoader for npz support
+try:
+    from data_interface import DNamiXNPZLoader
+except ImportError:
+    DNamiXNPZLoader = None
+
 
 class SPODAnalyzer(BaseAnalyzer):
     """
@@ -744,8 +750,9 @@ if __name__ == "__main__":
 
     # --- Configuration ---
     # data_file = "./data/jetLES_small.mat"  # Updated data path
-    data_file = "./data/jetLES.mat"  # Path to your data file
+    # data_file = "./data/jetLES.mat"  # Path to your data file
     # data_file = "./data/cavityPIV.mat"  # Path to your data file
+    data_file = "./data/consolidated_data.npz"
 
     # Default parameters
     nfft_param = 128  # FFT block size
@@ -780,7 +787,46 @@ if __name__ == "__main__":
             exit(1)
 
     # Set case-specific parameters and data loader
-    if "cavity" in data_file.lower():
+    if DNamiXNPZLoader is not None and data_file.endswith(".npz"):
+        loader = DNamiXNPZLoader()
+        available_fields = loader.get_available_fields(data_file)
+        print(f"Available fields in {data_file}: {available_fields}")
+        for field in available_fields:
+            print(f"\n===== Running SPOD for variable: {field} =====")
+            data = loader.load(data_file, field=field)
+            results_dir = os.path.join(RESULTS_DIR_SPOD, field)
+            figures_dir = os.path.join(FIGURES_DIR_SPOD, field)
+            os.makedirs(results_dir, exist_ok=True)
+            os.makedirs(figures_dir, exist_ok=True)
+            analyzer = SPODAnalyzer(
+                file_path=data_file,
+                nfft=nfft_param,
+                overlap=overlap_param,
+                data_loader=lambda fp: loader.load(fp, field=field),
+                spatial_weight_type="uniform",
+            )
+            analyzer.data = data
+            analyzer.analysis_type = f"spod_{field}"
+            run_all = not (args.prep or args.compute or args.plot)
+            if run_all or args.prep:
+                analyzer.load_and_preprocess()
+                analyzer.compute_fft_blocks()
+            if run_all or args.compute:
+                if analyzer.qhat.size == 0:
+                    analyzer.load_and_preprocess()
+                    analyzer.compute_fft_blocks()
+                analyzer.perform_spod()
+                analyzer.save_results()
+            if run_all or args.plot:
+                if analyzer.eigenvalues.size == 0 or analyzer.St.size == 0:
+                    print("No SPOD results to plot. Run with --compute first.")
+                else:
+                    analyzer.plot_eigenvalues_v2()
+                    analyzer.plot_modes()
+            if run_all:
+                print_summary("SPOD", analyzer.results_dir, analyzer.figures_dir)
+        exit(0)
+    elif "cavity" in data_file.lower():
         nfft_param = 256
         overlap_param = 128 / 256  # 0.5
         window_type_param = "sine"
@@ -788,11 +834,11 @@ if __name__ == "__main__":
         data_loader_param = load_mat_data
         print("Cavity case: Using nfft=256, sine window, uniform weights, load_mat_data.")
     elif "jet" in data_file.lower() or "dummy_jetles_data" in data_file.lower():
-        nfft_param = 256  # Define nfft_param for jet case
-        overlap_param = 0.5  # Define overlap_param for jet case
-        window_type_param = WINDOW_TYPE  # Default from configs (e.g., 'hamming')
+        nfft_param = 256
+        overlap_param = 0.5
+        window_type_param = WINDOW_TYPE
         spatial_weight_type_param = auto_detect_weight_type(data_file)
-        data_loader_param = load_jetles_data  # Handles .mat and .h5 from jetLES structure
+        data_loader_param = load_jetles_data
         print(f"Jet case: Using nfft={nfft_param}, overlap={overlap_param * 100}%, {window_type_param} window, {spatial_weight_type_param} weights, load_jetles_data.")
     else:
         print(f"Warning: Unknown data case for '{data_file}'. Using default jet parameters.")
@@ -805,7 +851,13 @@ if __name__ == "__main__":
     # Further configuration
     n_modes_to_save = 50  # Number of SPOD modes to save
 
-    analyzer = SPODAnalyzer(file_path=data_file, nfft=nfft_param, overlap=overlap_param, data_loader=data_loader_param, spatial_weight_type=spatial_weight_type_param)
+    analyzer = SPODAnalyzer(
+        file_path=data_file,
+        nfft=nfft_param,
+        overlap=overlap_param,
+        data_loader=data_loader_param,
+        spatial_weight_type=spatial_weight_type_param,
+    )
 
     run_all = not (args.prep or args.compute or args.plot)
 
