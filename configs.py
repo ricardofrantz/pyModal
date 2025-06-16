@@ -8,7 +8,6 @@ so we only need to import utils in other files.
 import json
 import os
 
-
 os.environ["OS_ACTIVITY_MODE"] = "disable"  # suppress macOS IMKClient logs
 """
 Configuration and shared imports for modal decomposition tools.
@@ -35,6 +34,9 @@ PREPROCESS_DIR_SPOD = "./preprocess_spod"
 PREPROCESS_DIR_POD = "./preprocess_pod"
 PREPROCESS_DIR_BSMD = "./preprocess_bsmd"
 PREPROCESS_DIR_DMD = "./preprocess_dmd"
+
+# Default dataset used when no --data argument is provided
+DEFAULT_DATA_FILE = "./data/consolidated_data.npz"
 
 # Figure saving options
 FIG_DPI = 500
