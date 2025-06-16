@@ -53,6 +53,12 @@ from utils import (
     print_summary,
 )
 
+# Try to import DNamiXNPZLoader for npz support
+try:
+    from data_interface import DNamiXNPZLoader
+except ImportError:
+    DNamiXNPZLoader = None
+
 
 def find_closest_freq_idx(freq_array, target):
     """Return the index of the closest value in freq_array to target. Returns None if freq_array is empty or None."""
@@ -653,55 +659,108 @@ if __name__ == "__main__":
 
     print_optimization_status()
 
-    data_file = "./data/jetLES.mat"
+    data_file = "./data/consolidated_data.npz"
 
-    if "jet" in data_file.lower():
-        loader = load_jetles_data
-        spatial_weight = "polar"
+    if DNamiXNPZLoader is not None and data_file.endswith(".npz"):
+        loader = DNamiXNPZLoader()
+        available_fields = loader.get_available_fields(data_file)
+        print(f"Available fields in {data_file}: {available_fields}")
+        for field in available_fields:
+            print(f"\n===== Running BSMD for variable: {field} =====")
+            data = loader.load(data_file, field=field)
+            results_dir = os.path.join(RESULTS_DIR_BSMD, field)
+            figures_dir = os.path.join(FIGURES_DIR_BSMD, field)
+            os.makedirs(results_dir, exist_ok=True)
+            os.makedirs(figures_dir, exist_ok=True)
+            analyzer = BSMDAnalyzer(
+                file_path=data_file,
+                nfft=128,
+                overlap=0.5,
+                results_dir=results_dir,
+                figures_dir=figures_dir,
+                data_loader=lambda fp: loader.load(fp, field=field),
+                spatial_weight_type="uniform",
+                use_static_triads=True,
+                static_triads=ALL_TRIADS,
+            )
+            analyzer.data = data
+            analyzer.analysis_type = f"bsmd_{field}"
+            run_all = not (args.prep or args.compute or args.plot)
+            if run_all or args.prep:
+                analyzer.load_and_preprocess()
+                analyzer.compute_fft_blocks()
+            if run_all or args.compute:
+                if analyzer.qhat.size == 0:
+                    analyzer.load_and_preprocess()
+                    analyzer.compute_fft_blocks()
+                analyzer.perform_bsmd()
+                analyzer.save_results()
+            if run_all or args.plot:
+                if analyzer.eigenvalues.size == 0:
+                    print("No BSMD results to plot. Run with --compute first.")
+                else:
+                    lambdas = np.abs(analyzer.eigenvalues)
+                    plt.figure()
+                    plt.plot(lambdas, "o-")
+                    plt.xlabel("Triad index")
+                    plt.ylabel("Eigenvalue magnitude")
+                    plt.title("BSMD eigenvalue magnitudes")
+                    plt.grid(True)
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(figures_dir, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
+                    plt.close()
+                    analyzer.plot_modes()
+            if run_all:
+                print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
+        exit(0)
     else:
-        loader = load_mat_data
-        spatial_weight = "uniform"
+        if "jet" in data_file.lower():
+            loader = load_jetles_data
+            spatial_weight = "polar"
+        else:
+            loader = load_mat_data
+            spatial_weight = "uniform"
 
-    analyzer = BSMDAnalyzer(
-        file_path=data_file,
-        nfft=128,
-        overlap=0.5,
-        results_dir=RESULTS_DIR_BSMD,
-        figures_dir=FIGURES_DIR_BSMD,
-        data_loader=loader,
-        spatial_weight_type=spatial_weight,
-        use_static_triads=True,
-        static_triads=ALL_TRIADS,
-    )
+        analyzer = BSMDAnalyzer(
+            file_path=data_file,
+            nfft=128,
+            overlap=0.5,
+            results_dir=RESULTS_DIR_BSMD,
+            figures_dir=FIGURES_DIR_BSMD,
+            data_loader=loader,
+            spatial_weight_type=spatial_weight,
+            use_static_triads=True,
+            static_triads=ALL_TRIADS,
+        )
 
-    run_all = not (args.prep or args.compute or args.plot)
+        run_all = not (args.prep or args.compute or args.plot)
 
-    if run_all or args.prep:
-        analyzer.load_and_preprocess()
-        analyzer.compute_fft_blocks()
-
-    if run_all or args.compute:
-        if analyzer.qhat.size == 0:
+        if run_all or args.prep:
             analyzer.load_and_preprocess()
             analyzer.compute_fft_blocks()
-        analyzer.perform_bsmd()
-        analyzer.save_results()
 
-    if run_all or args.plot:
-        if analyzer.eigenvalues.size == 0:
-            print("No BSMD results to plot. Run with --compute first.")
-        else:
-            lambdas = np.abs(analyzer.eigenvalues)
-            plt.figure()
-            plt.plot(lambdas, "o-")
-            plt.xlabel("Triad index")
-            plt.ylabel("Eigenvalue magnitude")
-            plt.title("BSMD eigenvalue magnitudes")
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
-            plt.close()
-            analyzer.plot_modes()
+        if run_all or args.compute:
+            if analyzer.qhat.size == 0:
+                analyzer.load_and_preprocess()
+                analyzer.compute_fft_blocks()
+            analyzer.perform_bsmd()
+            analyzer.save_results()
 
-    if run_all:
-        print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
+        if run_all or args.plot:
+            if analyzer.eigenvalues.size == 0:
+                print("No BSMD results to plot. Run with --compute first.")
+            else:
+                lambdas = np.abs(analyzer.eigenvalues)
+                plt.figure()
+                plt.plot(lambdas, "o-")
+                plt.xlabel("Triad index")
+                plt.ylabel("Eigenvalue magnitude")
+                plt.title("BSMD eigenvalue magnitudes")
+                plt.grid(True)
+                plt.tight_layout()
+                plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
+                plt.close()
+                analyzer.plot_modes()
+
+        if run_all:
+            print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
