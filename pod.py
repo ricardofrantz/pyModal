@@ -1183,7 +1183,7 @@ if __name__ == "__main__":
     # data_file = "./data/jetLES_small.mat"  # Updated data path
     # data_file = "./data/jetLES.mat"  # Path to your data file
     # data_file = "./data/cavityPIV.mat"  # Path to your data file
-    data_file = "./data/consolidated_data.npz"  # Path to your data file
+    data_file = "./data/snp1-947_u.npz"  # Path to your data file
 
     n_modes_to_save_main = 10  # Number of POD modes to save
     n_modes_to_plot_spatial_main = 4  # Number of spatial modes to visualize
