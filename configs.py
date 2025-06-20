@@ -36,7 +36,7 @@ PREPROCESS_DIR_BSMD = "./preprocess_bsmd"
 PREPROCESS_DIR_DMD = "./preprocess_dmd"
 
 # Default dataset used when no --data argument is provided
-DEFAULT_DATA_FILE = "./data/consolidated_data.npz"
+DEFAULT_DATA_FILE = "./data/snp1-947_u.npz"
 
 # Figure saving options
 FIG_DPI = 500

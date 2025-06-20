@@ -558,7 +558,9 @@ class BSMDAnalyzer(BaseAnalyzer):
             f.create_dataset("W", data=self.W)
         print(f"Results saved to {results_path}")
 
-    def plot_modes(self, triad_indices=None, top_n=3, plot_n_modes: int | None = 10):
+    from typing import Optional
+
+    def plot_modes(self, triad_indices=None, top_n=3, plot_n_modes: Optional[int] = 10):
         """Plot spatial BSMD modes for selected triads."""
         if self.modes1.size == 0 or self.modes2.size == 0:
             print("No BSMD modes to plot. Run perform_bsmd() first.")

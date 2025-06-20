@@ -531,7 +531,9 @@ class SPODAnalyzer(BaseAnalyzer):
         plt.close(fig)
         print(f"SPOD eigenvalue plot (v2) saved to {plot_filename}")
 
-    def plot_modes(self, freqs_to_plot=None, plot_n_modes: int | None = 10, modes_per_fig: int = 1) -> None:
+    from typing import Optional
+
+    def plot_modes(self, freqs_to_plot=None, plot_n_modes: Optional[int] = 10, modes_per_fig: int = 1) -> None:
         """Plot spatial modes for selected frequencies as individual figures."""
 
         if self.modes.size == 0 or self.St.size == 0:

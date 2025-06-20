@@ -2,7 +2,13 @@
 Shared FFT backend selection and wrapper utilities for modal decomposition and benchmarking.
 """
 
-from configs import FFT_BACKEND
+import sys
+import os
+try:
+    from configs import FFT_BACKEND
+except ImportError:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    from configs import FFT_BACKEND
 
 
 def accelerate_fft(x, axis=0):
@@ -47,8 +53,10 @@ def accelerate_fft(x, axis=0):
 
 
 def scipy_fft(x, axis=0):
-    from scipy.fft import fft
-
+    try:
+        from scipy.fft import fft
+    except ImportError:
+        from scipy.fftpack import fft
     return fft(x, axis=axis)
 
 
