@@ -9,12 +9,17 @@ exact DMD algorithm as in the PyDMD project.
 # Standard library imports
 import argparse
 import os
+
 import h5py
 import matplotlib
-matplotlib.use('Agg')
-from typing import Optional
-import matplotlib.pyplot as plt
+
+matplotlib.use("Agg")
+import inspect
 import warnings
+from typing import Optional
+
+import matplotlib.pyplot as plt
+
 # Suppress contour warnings when no levels can be plotted
 warnings.filterwarnings("ignore", message="No contour levels were found within the data range.")
 import numpy as np
@@ -26,7 +31,6 @@ from configs import (
     FIGURES_DIR_DMD,
     RESULTS_DIR_DMD,
 )
-
 from utils import (
     BaseAnalyzer,
     get_fig_aspect_ratio,
@@ -39,7 +43,6 @@ try:
     from data_interface import DNamiXNPZLoader
 except ImportError:
     DNamiXNPZLoader = None
-
 
 
 class DMDAnalyzer(BaseAnalyzer):
@@ -73,7 +76,6 @@ class DMDAnalyzer(BaseAnalyzer):
         self.temporal_mean = np.array([])
         # Store modal amplitudes (|b|) after perform_dmd()
         self.amplitudes = np.array([])
-
 
     def perform_dmd(self):
         """Compute DMD modes, eigenvalues and time coefficients."""
@@ -139,10 +141,10 @@ class DMDAnalyzer(BaseAnalyzer):
                 self.analysis_type,
             )
         path = os.path.join(self.results_dir, filename)
-        
+
         if not os.path.exists(path):
             raise FileNotFoundError(f"DMD results file not found: {path}")
-        
+
         with h5py.File(path, "r") as f:
             self.eigenvalues = f["eigenvalues"][:]
             self.modes = f["modes"][:]
@@ -203,8 +205,8 @@ class DMDAnalyzer(BaseAnalyzer):
         ax_complex.plot(eigvals.real, eigvals.imag, "o", mfc="none", mec="brown")
         # Annotate every eigenvalue with its mode number; mark mean explicitly
         for k, lam in enumerate(eigvals):
-            label = f"{k+1}"
-            if np.isclose(lam, 1+0j, atol=1e-3):
+            label = f"{k + 1}"
+            if np.isclose(lam, 1 + 0j, atol=1e-3):
                 label += " (mean)"
             ax_complex.text(lam.real, lam.imag, f" {label}", fontsize=7, color="black")
         idx_mean = int(np.argmin(np.abs(eigvals - 1)))
@@ -224,18 +226,38 @@ class DMDAnalyzer(BaseAnalyzer):
         ax_complex.set_title("DMD eigenvalues")
 
         # Amplitude vs frequency
-        ax_freq.stem(freq, amps_norm, linefmt="brown", markerfmt="ro", basefmt=" ", use_line_collection=True)
+        if "use_line_collection" in inspect.signature(ax_freq.stem).parameters:
+            ax_freq.stem(
+                freq,
+                amps_norm,
+                linefmt="brown",
+                markerfmt="ro",
+                basefmt=" ",
+                use_line_collection=True,
+            )
+        else:
+            ax_freq.stem(freq, amps_norm, linefmt="brown", markerfmt="ro", basefmt=" ")
         for k, (x, y) in enumerate(zip(freq, amps_norm)):
-            ax_freq.text(x, y, f" {k+1}", fontsize=6, rotation=45, va="bottom")
+            ax_freq.text(x, y, f" {k + 1}", fontsize=6, rotation=45, va="bottom")
         ax_freq.set_xlabel("frequency")
         ax_freq.set_ylabel("normalized amplitude")
         ax_freq.set_yscale("log")
         ax_freq.set_title("Amplitude vs frequency")
 
         # Amplitude vs growth rate
-        ax_growth.stem(growth, amps_norm, linefmt="brown", markerfmt="ro", basefmt=" ", use_line_collection=True)
+        if "use_line_collection" in inspect.signature(ax_growth.stem).parameters:
+            ax_growth.stem(
+                growth,
+                amps_norm,
+                linefmt="brown",
+                markerfmt="ro",
+                basefmt=" ",
+                use_line_collection=True,
+            )
+        else:
+            ax_growth.stem(growth, amps_norm, linefmt="brown", markerfmt="ro", basefmt=" ")
         for k, (x, y) in enumerate(zip(growth, amps_norm)):
-            ax_growth.text(x, y, f" {k+1}", fontsize=6, rotation=45, va="bottom")
+            ax_growth.text(x, y, f" {k + 1}", fontsize=6, rotation=45, va="bottom")
         ax_growth.set_xlabel("growth rate")
         ax_growth.set_yscale("log")
         ax_growth.set_title("Amplitude vs growth rate")
@@ -321,28 +343,29 @@ class DMDAnalyzer(BaseAnalyzer):
                 # Add line contours only if range is significant
                 if vmax - vmin > 1e-12:
                     ax.contour(x_mesh, y_mesh, comp_plot, levels=levels[::4], colors="k", linewidths=0.4, alpha=0.4)
-                
+
                 # Add individual small colorbar inside the data area (upper right)
                 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-                cax = inset_axes(ax, width="15%", height="6%", loc='upper right', borderpad=3)
-                cb = fig.colorbar(cf, cax=cax, orientation='horizontal', format="%.2f")
-                cb.ax.tick_params(labelsize=8, pad=1, colors='black')
-                cb.ax.xaxis.set_ticks_position('top')
-                cb.ax.xaxis.set_label_position('top')
+
+                cax = inset_axes(ax, width="15%", height="6%", loc="upper right", borderpad=3)
+                cb = fig.colorbar(cf, cax=cax, orientation="horizontal", format="%.2f")
+                cb.ax.tick_params(labelsize=8, pad=1, colors="black")
+                cb.ax.xaxis.set_ticks_position("top")
+                cb.ax.xaxis.set_label_position("top")
                 # Set custom ticks: min, 0, max (except for magnitude which starts at 0)
                 if r == 2:  # magnitude
-                    cb.set_ticks([0, vmax/2, vmax])
-                    cb.set_ticklabels(['0', f'{vmax/2:.2f}', f'{vmax:.2f}'])
+                    cb.set_ticks([0, vmax / 2, vmax])
+                    cb.set_ticklabels(["0", f"{vmax / 2:.2f}", f"{vmax:.2f}"])
                 elif r == 3:  # phase
                     cb.set_ticks([-np.pi, 0, np.pi])
-                    cb.set_ticklabels(['-π', '0', 'π'])
+                    cb.set_ticklabels(["-π", "0", "π"])
                 else:  # real and imaginary
                     cb.set_ticks([vmin, 0, vmax])
-                    cb.set_ticklabels([f'{vmin:.2f}', '0', f'{vmax:.2f}'])
+                    cb.set_ticklabels([f"{vmin:.2f}", "0", f"{vmax:.2f}"])
                 # Make colorbar background semi-transparent
-                cax.patch.set_facecolor('black')
+                cax.patch.set_facecolor("black")
                 cax.patch.set_alpha(0.7)
-                
+
                 # Cylinder overlay (always)
                 cylinder = plt.Circle((0, 0), 0.5, facecolor="lightgray", edgecolor="black", linewidth=0.5)
                 ax.add_patch(cylinder)
@@ -359,7 +382,7 @@ class DMDAnalyzer(BaseAnalyzer):
                     if m == 0:
                         header = "1 (mean)"
                     else:
-                        header = f"{m+1} (f={freq[m]:.2f})"
+                        header = f"{m + 1} (f={freq[m]:.2f})"
                     ax.set_title(header)
         fig.tight_layout()
         fname_modes = os.path.join(self.figures_dir, f"{self.data_root}_dmd_modes_detailed_{n_modes}_{var_name}.png")
@@ -384,7 +407,7 @@ class DMDAnalyzer(BaseAnalyzer):
         plt.grid(True, which="both", ls="--")
         plt.ylim(0, 105)
         fname = os.path.join(self.figures_dir, f"{self.data_root}_dmd_cumulative_energy.png")
-        plt.savefig(fname, dpi=FIG_DPI*0.8)
+        plt.savefig(fname, dpi=FIG_DPI * 0.8)
         plt.close()
         print(f"Saving figure {fname}")
 
@@ -545,6 +568,7 @@ if __name__ == "__main__":
 
     if args.config:
         from configs import load_config
+
         load_config(args.config)
 
     # Example: data_file = "./data/consolidated_data.npz"
@@ -554,7 +578,7 @@ if __name__ == "__main__":
     n_coeffs_to_plot_time_main = 8
 
     # Support batch field analysis for npz files
-    if DNamiXNPZLoader is not None and data_file.endswith('.npz'):
+    if DNamiXNPZLoader is not None and data_file.endswith(".npz"):
         loader = DNamiXNPZLoader()
         available_fields = loader.get_available_fields(data_file)
         print(f"Available fields in {data_file}: {available_fields}")
@@ -571,11 +595,11 @@ if __name__ == "__main__":
                 figures_dir=figures_dir,
                 data_loader=lambda fp: loader.load(fp, field=field),
                 n_modes_save=n_modes_to_save_main,
-                spatial_weight_type='uniform',
+                spatial_weight_type="uniform",
             )
             analyzer.data = data
             analyzer.analysis_type = f"dmd_{field}"
-            
+
             if args.plot:
                 # Only load results and plot, do not recompute
                 analyzer.load_results()
@@ -597,13 +621,14 @@ if __name__ == "__main__":
     else:
         # Fallback for legacy .mat/.h5 files
         from utils import load_mat_data
+
         loader = load_mat_data
         analyzer = DMDAnalyzer(
             file_path=data_file,
             results_dir=RESULTS_DIR_DMD,
             figures_dir=FIGURES_DIR_DMD,
             data_loader=loader,
-            spatial_weight_type='uniform',
+            spatial_weight_type="uniform",
             n_modes_save=n_modes_to_save_main,
         )
         run_all = not (args.prep or args.compute or args.plot)
