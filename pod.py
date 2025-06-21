@@ -754,6 +754,19 @@ class PODAnalyzer(BaseAnalyzer):
             plt.ylabel("PSD")
             plt.title(f"Periodogram Mode {i + 1}")
             plt.grid(True, linestyle=":")
+            plt.xlim(1e-2, self.fs / 2)
+            plt.ylim(1e-6, None)
+            peak_idx = int(np.argmax(psd))
+            peak_freq = freqs[peak_idx]
+            plt.axvline(peak_freq, color="r", linestyle="--", linewidth=1)
+            plt.text(
+                peak_freq,
+                psd[peak_idx],
+                f"{peak_freq:.3f}",
+                color="r",
+                ha="right",
+                va="bottom",
+            )
 
         plt.tight_layout()
         plot_filename = os.path.join(self.figures_dir, f"{self.data_root}_pod_time_coeffs.png")

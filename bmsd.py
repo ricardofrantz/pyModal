@@ -587,8 +587,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         )
 
         for idx in triad_indices:
-            mode1 = self.modes1[idx, :].real.reshape(nx, ny).T
-            mode2 = self.modes2[idx, :].real.reshape(nx, ny).T
+            mode1 = self.modes1[idx, :].real.reshape(ny, nx)
+            mode2 = self.modes2[idx, :].real.reshape(ny, nx)
             triad = self.triads[idx]
 
             if x_coords.ndim == 1 and y_coords.ndim == 1:
