@@ -621,16 +621,16 @@ class SPODAnalyzer(BaseAnalyzer):
                 if modes_per_fig == 1 and ncols == 1:
                     fname = os.path.join(
                         self.figures_dir,
-                        f"{self.data_root}_SPOD_mode{start + 1}_St{st_val:.4f}_{var_name}.png",
+                        f"{self.data_root}_SPOD_mode{start + 1}_freq{f_idx}_{var_name}.png",
                     )
                 else:
                     fname = os.path.join(
                         self.figures_dir,
-                        f"{self.data_root}_SPOD_modes_{start + 1}_to_{end}_St{st_val:.4f}_{var_name}.png",
+                        f"{self.data_root}_SPOD_modes_{start + 1}_to_{end}_freq{f_idx}_{var_name}.png",
                     )
                 fig.savefig(fname, dpi=FIG_DPI)
                 plt.close(fig)
-                print(f"SPOD modes {start + 1}-{end} at St={st_val:.4f} saved to {fname}")
+                print(f"SPOD modes {start + 1}-{end} at St={st_val:.4f} (freq index {f_idx}) saved to {fname}")
 
     def plot_cumulative_energy(self, freq_idx=None):
         """Plot cumulative energy captured by modes at a given frequency."""
@@ -649,7 +649,7 @@ class SPODAnalyzer(BaseAnalyzer):
         ax.set_title(f"Cumulative energy at St={self.St[freq_idx]:.3f}")
         plot_filename = os.path.join(
             self.figures_dir,
-            f"{self.data_root}_SPOD_cumulative_St{self.St[freq_idx]:.3f}.{FIG_FORMAT}",
+            f"{self.data_root}_SPOD_cumulative_freq{freq_idx}.{FIG_FORMAT}",
         )
         plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close(fig)
@@ -680,7 +680,7 @@ class SPODAnalyzer(BaseAnalyzer):
         ax.set_title(f"SPOD Time Coefficients at St={self.St[freq_idx]:.4f}")
         plot_filename = os.path.join(
             self.figures_dir,
-            f"{self.data_root}_SPOD_timecoeffs_St{self.St[freq_idx]:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+            f"{self.data_root}_SPOD_timecoeffs_freq{freq_idx}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
         )
         plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close(fig)
@@ -720,7 +720,7 @@ class SPODAnalyzer(BaseAnalyzer):
         ax.set_title(f"Reconstruction Error at St={self.St[freq_idx]:.4f}")
         plot_filename = os.path.join(
             self.figures_dir,
-            f"{self.data_root}_SPOD_reconstruction_error_St{self.St[freq_idx]:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+            f"{self.data_root}_SPOD_reconstruction_error_freq{freq_idx}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
         )
         plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close(fig)
@@ -745,7 +745,7 @@ class SPODAnalyzer(BaseAnalyzer):
         ax.legend()
         plot_filename = os.path.join(
             self.figures_dir,
-            f"{self.data_root}_SPOD_complex_St{self.St[freq_idx]:.4f}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
+            f"{self.data_root}_SPOD_complex_freq{freq_idx}_nfft{self.nfft}_noverlap{self.overlap}.{FIG_FORMAT}",
         )
         plt.savefig(plot_filename, dpi=FIG_DPI)
         plt.close(fig)
