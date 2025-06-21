@@ -2,6 +2,7 @@
 import argparse
 import os
 import time
+import warnings
 
 import h5py
 import matplotlib.colors as colors
@@ -587,8 +588,13 @@ class SPODAnalyzer(BaseAnalyzer):
                     ax = axes[j]
                     mode_real = self.modes[f_idx, :, m_idx].real
                     if Nx * Ny == mode_real.size and Nx > 1 and Ny > 1:
-                        mode_2d = mode_real.reshape(Nx, Ny).T
-                        im = ax.contourf(x_coords, y_coords, mode_2d, levels=60, cmap="bwr")
+                        mode_2d = mode_real.reshape(Nx, Ny)
+                        if x_coords.ndim == 1 and y_coords.ndim == 1:
+                            X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
+                        else:
+                            X, Y = x_coords, y_coords
+                        mode_plot = np.ma.array(mode_2d, mask=np.isnan(mode_2d))
+                        im = ax.contourf(X, Y, mode_plot, levels=60, cmap="bwr")
                         ax.set_aspect("auto")
                         fig.colorbar(im, ax=ax, shrink=0.8, label=r"Re($\Phi$)")
                         ax.set_xlabel("X")
@@ -599,7 +605,9 @@ class SPODAnalyzer(BaseAnalyzer):
                         ax.set_ylabel("Amplitude")
                     ax.set_title(f"SPOD Mode {m_idx + 1} at St={st_val:.4f} [{var_name}]")
 
-                fig.tight_layout()
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    fig.tight_layout()
                 if modes_per_fig == 1 and ncols == 1:
                     fname = os.path.join(
                         self.figures_dir,
