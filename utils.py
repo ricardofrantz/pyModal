@@ -16,6 +16,7 @@ from data_interface import load_data as di_load_data
 from data_interface import load_jetles_data as di_load_jetles_data
 from data_interface import load_mat_data as di_load_mat_data
 from fft.fft_backends import get_fft_func
+
 try:
     from parallel_utils import (
         PARALLEL_AVAILABLE,
@@ -88,6 +89,7 @@ def compute_aspect_ratio(x_coords, y_coords):
 
 from typing import Union
 
+
 def get_aspect_ratio(data: dict) -> Union[float, str]:
     """Return aspect ratio for ``data`` using available coordinates."""
     x = data.get("x", [])
@@ -95,7 +97,9 @@ def get_aspect_ratio(data: dict) -> Union[float, str]:
     return compute_aspect_ratio(x, y)
 
 
-def get_fig_aspect_ratio(data: dict, clamp_low: float = 0.5, clamp_high: float = 2.0) -> float:
+def get_fig_aspect_ratio(
+    data: dict, clamp_low: float = 0.5, clamp_high: float = 2.0
+) -> float:
     """Return ``Nx/Ny`` ratio clamped for figure sizing."""
     nx = int(data.get("Nx", 1))
     ny = int(data.get("Ny", 1))
@@ -176,7 +180,10 @@ def generate_dummy_data_like_jetles(
     mode2 = np.cos(0.5 * np.pi * x) * np.sin(2.0 * np.pi * r)
 
     # Construct coherent pressure field (shape: Nx, Ny, Ns)
-    signal = np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :] + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
+    signal = (
+        np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :]
+        + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
+    )
 
     noise = noise_level * np.random.randn(Ns, Nx, Ny)
     p = np.transpose(signal + noise, (1, 2, 0))  # (Nx, Ny, Ns)
@@ -203,45 +210,49 @@ def calculate_polar_weights(x, y, use_parallel=True):
     """Calculate integration weights for a 2D cylindrical grid (x, r)."""
     if use_parallel and PARALLEL_AVAILABLE:
         return calculate_polar_weights_optimized(x, y)
-    Nx, Ny = x.shape[0], y.shape[0]
+    # Support both 1-D and 2-D coordinate arrays
+    x_line = x[:, 0] if x.ndim > 1 else x
+    y_line = y[0, :] if y.ndim > 1 else y
+    Nx = x_line.shape[0]
+    Ny = y_line.shape[0]
 
     # Calculate y-direction (r-direction) integration weights (Wy)
     Wy = np.zeros((Ny, 1))
 
     # First point (centerline)
     if Ny > 1:
-        y_mid_right = (y[0] + y[1]) / 2
+        y_mid_right = (y_line[0] + y_line[1]) / 2
         Wy[0] = np.pi * y_mid_right**2
     else:
-        Wy[0] = np.pi * y[0] ** 2
+        Wy[0] = np.pi * y_line[0] ** 2
 
     # Middle points
     for i in range(1, Ny - 1):
-        y_mid_left = (y[i - 1] + y[i]) / 2
-        y_mid_right = (y[i] + y[i + 1]) / 2
+        y_mid_left = (y_line[i - 1] + y_line[i]) / 2
+        y_mid_right = (y_line[i] + y_line[i + 1]) / 2
         Wy[i] = np.pi * (y_mid_right**2 - y_mid_left**2)
 
     # Last point
     if Ny > 1:
-        y_mid_left = (y[-2] + y[-1]) / 2
-        Wy[Ny - 1] = np.pi * (y[-1] ** 2 - y_mid_left**2)
+        y_mid_left = (y_line[-2] + y_line[-1]) / 2
+        Wy[Ny - 1] = np.pi * (y_line[-1] ** 2 - y_mid_left**2)
 
     # Calculate x-direction integration weights (Wx)
     Wx = np.zeros((Nx, 1))
 
     # First point
     if Nx > 1:
-        Wx[0] = (x[1] - x[0]) / 2
+        Wx[0] = (x_line[1] - x_line[0]) / 2
     else:
         Wx[0] = 1.0
 
     # Middle points
     for i in range(1, Nx - 1):
-        Wx[i] = (x[i + 1] - x[i - 1]) / 2
+        Wx[i] = (x_line[i + 1] - x_line[i - 1]) / 2
 
     # Last point
     if Nx > 1:
-        Wx[Nx - 1] = (x[Nx - 1] - x[Nx - 2]) / 2
+        Wx[Nx - 1] = (x_line[Nx - 1] - x_line[Nx - 2]) / 2
 
     # Combine weights
     W = np.reshape(Wx @ np.transpose(Wy), (Nx * Ny, 1))
@@ -251,7 +262,13 @@ def calculate_polar_weights(x, y, use_parallel=True):
 
 def calculate_uniform_weights(x, y):
     """Return uniform weights for a 2D grid (Cartesian)."""
-    Nx, Ny = x.shape[0], y.shape[0]
+    # Support both 1-D and 2-D coordinate arrays
+    if x.ndim > 1:
+        Nx, Ny = x.shape
+    elif y.ndim > 1:
+        Nx, Ny = y.shape
+    else:
+        Nx, Ny = x.shape[0], y.shape[0]
     return np.ones((Nx * Ny, 1))
 
 
@@ -362,10 +379,9 @@ def blocksfft(
 
 def auto_detect_weight_type(file_path):
     # Always return 'uniform' for dNamiX consolidated .npz files
-    if file_path.lower().endswith('.npz'):
-        return 'uniform'
+    if file_path.lower().endswith(".npz"):
+        return "uniform"
     return di_auto_detect_weight_type(file_path)
-
 
 
 def spod_function(qhat, nblocks, dst, w, return_psi=False, use_parallel=True):
@@ -480,29 +496,39 @@ class BaseAnalyzer:
 
         # Calculate spatial weights
         if self.spatial_weight_type == "polar":
-            self.W = calculate_polar_weights(self.data["x"], self.data["y"], use_parallel=self.use_parallel)
+            self.W = calculate_polar_weights(
+                self.data["x"], self.data["y"], use_parallel=self.use_parallel
+            )
             print("Using polar (cylindrical) spatial weights.")
         else:
             self.W = calculate_uniform_weights(self.data["x"], self.data["y"])
             print("Using uniform spatial weights (rectangular grid).")
 
         # Calculate derived parameters
-        self.nblocks = int(np.ceil((self.data["Ns"] - self.novlap) / (self.nfft - self.novlap)))
+        self.nblocks = int(
+            np.ceil((self.data["Ns"] - self.novlap) / (self.nfft - self.novlap))
+        )
         if self.data["dt"] == 0.0:
             print("[WARNING] dt is zero. Setting dt to 0.1.")
             self.data["dt"] = 0.1
         self.fs = 1 / self.data["dt"]
 
-        print(f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points")
+        print(
+            f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points"
+        )
         if self.nfft > 1:
-            print(f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]")
+            print(
+                f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]"
+            )
 
     def compute_fft_blocks(self):
         """Compute blocked FFT using Welch's method."""
         if "q" not in self.data:
             raise ValueError("Data not loaded. Call load_and_preprocess() first.")
 
-        print(f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend...")
+        print(
+            f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend..."
+        )
         self.qhat = blocksfft(
             self.data["q"],
             self.nfft,
@@ -524,7 +550,13 @@ class BaseAnalyzer:
             analysis_type (str): Analysis type for filename (e.g., 'spod', 'bsmd').
         """
         if not filename:
-            filename = make_result_filename(self.data_root, self.nfft, self.overlap, self.data.get("Ns", 0), analysis_type)
+            filename = make_result_filename(
+                self.data_root,
+                self.nfft,
+                self.overlap,
+                self.data.get("Ns", 0),
+                analysis_type,
+            )
         save_path = os.path.join(self.results_dir, filename)
         print(f"Saving results to {save_path}")
         # This is a placeholder - subclasses should implement specific saving logic
