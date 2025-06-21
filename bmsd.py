@@ -587,8 +587,13 @@ class BSMDAnalyzer(BaseAnalyzer):
         )
 
         for idx in triad_indices:
-            mode1 = self.modes1[idx, :].real.reshape(nx, ny).T
-            mode2 = self.modes2[idx, :].real.reshape(nx, ny).T
+            # Reshape mode vectors into the spatial grid.  No transpose is
+            # required here because ``x`` and ``y`` coordinates are assumed to
+            # follow the same (Nx, Ny) ordering as the stored modes.  The
+            # previous transpose caused a mismatch when the coordinates were
+            # provided as full 2D arrays.
+            mode1 = self.modes1[idx, :].real.reshape(nx, ny)
+            mode2 = self.modes2[idx, :].real.reshape(nx, ny)
             triad = self.triads[idx]
 
             if x_coords.ndim == 1 and y_coords.ndim == 1:
