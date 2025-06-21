@@ -6,9 +6,10 @@ All imports are centralized here to keep the code clean and consistent.
 """
 
 import os
-import numpy as np
-import h5py
 import time
+
+import h5py
+import numpy as np
 
 from configs import *
 from data_interface import auto_detect_weight_type as di_auto_detect_weight_type
@@ -110,16 +111,16 @@ def get_fig_aspect_ratio(
     return max(clamp_low, min(aspect, clamp_high))
 
 
-def load_jetles_data(file_path):
-    return di_load_jetles_data(file_path)
+def load_jetles_data(file_path, **kwargs):
+    return di_load_jetles_data(file_path, **kwargs)
 
 
-def load_mat_data(file_path):
-    return di_load_mat_data(file_path)
+def load_mat_data(file_path, **kwargs):
+    return di_load_mat_data(file_path, **kwargs)
 
 
-def load_data(file_path):
-    return di_load_data(file_path)
+def load_data(file_path, **kwargs):
+    return di_load_data(file_path, **kwargs)
 
 
 def generate_dummy_data_like_jetles(
