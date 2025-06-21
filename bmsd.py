@@ -35,6 +35,7 @@ from scipy.sparse import linalg as splinalg
 from tqdm import tqdm
 
 from configs import (
+    CMAP_DIV,
     CMAP_SEQ,
     FIGURES_DIR_BSMD,
     RESULTS_DIR_BSMD,
@@ -589,34 +590,75 @@ class BSMDAnalyzer(BaseAnalyzer):
             mode1 = self.modes1[idx, :].real.reshape(nx, ny).T
             mode2 = self.modes2[idx, :].real.reshape(nx, ny).T
             triad = self.triads[idx]
-            fig, axes = plt.subplots(
-                1,
-                2,
-                figsize=(8 * fig_aspect, 4),
-            )
-            im1 = axes[0].imshow(
-                mode1,
-                origin="lower",
-                extent=extent,
-                cmap=CMAP_SEQ,
-                aspect="auto",
-            )
-            axes[0].set_title(f"Triad {tuple(triad)} Phi1 [{var_name}]")
-            axes[0].set_xlabel("X")
-            axes[0].set_ylabel("Y")
-            fig.colorbar(im1, ax=axes[0], shrink=0.8)
 
-            im2 = axes[1].imshow(
-                mode2,
-                origin="lower",
-                extent=extent,
-                cmap=CMAP_SEQ,
-                aspect="auto",
+            if x_coords.ndim == 1 and y_coords.ndim == 1:
+                x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
+            else:
+                x_mesh, y_mesh = x_coords, y_coords
+            dist = np.sqrt(x_mesh**2 + y_mesh**2)
+            cylinder_mask = dist <= 0.5
+
+            fig, axes = plt.subplots(1, 2, figsize=(8 * fig_aspect, 4))
+
+            field1 = np.ma.array(mode1, mask=cylinder_mask)
+            vmax1 = np.max(np.abs(field1))
+            levels1 = np.linspace(-vmax1, vmax1, 21)
+            cf1 = axes[0].contourf(
+                x_mesh,
+                y_mesh,
+                field1,
+                levels=levels1,
+                cmap=CMAP_DIV,
+                extend="both",
             )
+            axes[0].contour(
+                x_mesh,
+                y_mesh,
+                field1,
+                levels=levels1[::4],
+                colors="k",
+                linewidths=0.5,
+                alpha=0.5,
+            )
+            axes[0].add_patch(plt.Circle((0, 0), 0.5, facecolor="lightgray", edgecolor="black", linewidth=0.5))
+            axes[0].set_title(f"Triad {tuple(triad)} Phi1 [{var_name}]")
+            axes[0].set_xlabel(r"$x/D$")
+            axes[0].set_ylabel(r"$y/D$")
+            axes[0].set_aspect("equal", "box")
+            axes[0].set_xlim(x_coords.min(), x_coords.max())
+            axes[0].set_ylim(y_coords.min(), y_coords.max())
+            axes[0].grid(True, linestyle="--", alpha=0.3)
+            fig.colorbar(cf1, ax=axes[0], shrink=0.8)
+
+            field2 = np.ma.array(mode2, mask=cylinder_mask)
+            vmax2 = np.max(np.abs(field2))
+            levels2 = np.linspace(-vmax2, vmax2, 21)
+            cf2 = axes[1].contourf(
+                x_mesh,
+                y_mesh,
+                field2,
+                levels=levels2,
+                cmap=CMAP_DIV,
+                extend="both",
+            )
+            axes[1].contour(
+                x_mesh,
+                y_mesh,
+                field2,
+                levels=levels2[::4],
+                colors="k",
+                linewidths=0.5,
+                alpha=0.5,
+            )
+            axes[1].add_patch(plt.Circle((0, 0), 0.5, facecolor="lightgray", edgecolor="black", linewidth=0.5))
             axes[1].set_title(f"Triad {tuple(triad)} Phi2 [{var_name}]")
-            axes[1].set_xlabel("X")
-            axes[1].set_ylabel("Y")
-            fig.colorbar(im2, ax=axes[1], shrink=0.8)
+            axes[1].set_xlabel(r"$x/D$")
+            axes[1].set_ylabel(r"$y/D$")
+            axes[1].set_aspect("equal", "box")
+            axes[1].set_xlim(x_coords.min(), x_coords.max())
+            axes[1].set_ylim(y_coords.min(), y_coords.max())
+            axes[1].grid(True, linestyle="--", alpha=0.3)
+            fig.colorbar(cf2, ax=axes[1], shrink=0.8)
 
             fig.tight_layout()
             fname = os.path.join(self.figures_dir, f"{self.data_root}_BSMD_triad{idx}_{var_name}.png")
