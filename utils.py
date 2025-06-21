@@ -5,6 +5,7 @@ Common utilities for modal decomposition methods.
 All imports are centralized here to keep the code clean and consistent.
 """
 
+import glob
 import os
 import time
 
@@ -98,9 +99,7 @@ def get_aspect_ratio(data: dict) -> Union[float, str]:
     return compute_aspect_ratio(x, y)
 
 
-def get_fig_aspect_ratio(
-    data: dict, clamp_low: float = 0.5, clamp_high: float = 2.0
-) -> float:
+def get_fig_aspect_ratio(data: dict, clamp_low: float = 0.5, clamp_high: float = 2.0) -> float:
     """Return ``Nx/Ny`` ratio clamped for figure sizing."""
     nx = int(data.get("Nx", 1))
     ny = int(data.get("Ny", 1))
@@ -181,10 +180,7 @@ def generate_dummy_data_like_jetles(
     mode2 = np.cos(0.5 * np.pi * x) * np.sin(2.0 * np.pi * r)
 
     # Construct coherent pressure field (shape: Nx, Ny, Ns)
-    signal = (
-        np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :]
-        + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
-    )
+    signal = np.sin(2 * np.pi * f1 * t)[:, None, None] * mode1[None, :, :] + 0.5 * np.sin(2 * np.pi * f2 * t)[:, None, None] * mode2[None, :, :]
 
     noise = noise_level * np.random.randn(Ns, Nx, Ny)
     p = np.transpose(signal + noise, (1, 2, 0))  # (Nx, Ny, Ns)
@@ -484,7 +480,16 @@ class BaseAnalyzer:
 
         # Extract root name for output files
         base = os.path.basename(file_path)
-        self.data_root = os.path.splitext(base)[0]
+        root, ext = os.path.splitext(base)
+        if ext == ".npz":
+            npz_files = glob.glob(os.path.join(os.path.dirname(file_path), "*.npz"))
+            if len(npz_files) > 1:
+                # Use directory name if multiple npz files were concatenated
+                self.data_root = os.path.basename(os.path.dirname(file_path))
+            else:
+                self.data_root = root
+        else:
+            self.data_root = root
 
         # Ensure output directories exist
         os.makedirs(self.results_dir, exist_ok=True)
@@ -497,39 +502,29 @@ class BaseAnalyzer:
 
         # Calculate spatial weights
         if self.spatial_weight_type == "polar":
-            self.W = calculate_polar_weights(
-                self.data["x"], self.data["y"], use_parallel=self.use_parallel
-            )
+            self.W = calculate_polar_weights(self.data["x"], self.data["y"], use_parallel=self.use_parallel)
             print("Using polar (cylindrical) spatial weights.")
         else:
             self.W = calculate_uniform_weights(self.data["x"], self.data["y"])
             print("Using uniform spatial weights (rectangular grid).")
 
         # Calculate derived parameters
-        self.nblocks = int(
-            np.ceil((self.data["Ns"] - self.novlap) / (self.nfft - self.novlap))
-        )
+        self.nblocks = int(np.ceil((self.data["Ns"] - self.novlap) / (self.nfft - self.novlap)))
         if self.data["dt"] == 0.0:
             print("[WARNING] dt is zero. Setting dt to 0.1.")
             self.data["dt"] = 0.1
         self.fs = 1 / self.data["dt"]
 
-        print(
-            f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points"
-        )
+        print(f"Data loaded: {self.data['Ns']} snapshots, {self.data['Nx']}×{self.data['Ny']} spatial points")
         if self.nfft > 1:
-            print(
-                f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]"
-            )
+            print(f"FFT parameters: {self.nfft} points, {self.overlap * 100}% overlap, {self.nblocks} blocks [backend: {FFT_BACKEND}]")
 
     def compute_fft_blocks(self):
         """Compute blocked FFT using Welch's method."""
         if "q" not in self.data:
             raise ValueError("Data not loaded. Call load_and_preprocess() first.")
 
-        print(
-            f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend..."
-        )
+        print(f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend...")
         self.qhat = blocksfft(
             self.data["q"],
             self.nfft,
@@ -607,3 +602,27 @@ class BaseAnalyzer:
             if hasattr(self, attr):
                 meta[attr] = getattr(self, attr)
         return meta
+
+    def release_memory(self) -> None:
+        """Release large arrays to free memory."""
+        attrs = [
+            "data",
+            "W",
+            "qhat",
+            "modes",
+            "eigenvalues",
+            "time_coefficients",
+            "temporal_mean",
+            "freq",
+            "St",
+            "amplitudes",
+        ]
+        for attr in attrs:
+            if hasattr(self, attr):
+                val = getattr(self, attr)
+                if isinstance(val, np.ndarray):
+                    setattr(self, attr, np.array([]))
+                elif isinstance(val, dict):
+                    setattr(self, attr, {})
+                else:
+                    setattr(self, attr, None)

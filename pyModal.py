@@ -8,7 +8,7 @@ from configs import DEFAULT_DATA_FILE
 from dmd import DMDAnalyzer
 from pod import PODAnalyzer
 from spod import SPODAnalyzer
-from utils import auto_detect_weight_type
+from utils import auto_detect_weight_type, print_summary
 
 
 def run_pod(data_file, prep, compute, plot):
@@ -33,6 +33,8 @@ def run_pod(data_file, prep, compute, plot):
         analyzer.plot_reconstruction_comparison()
     if run_all:
         pass
+    print_summary("POD", analyzer.results_dir, analyzer.figures_dir)
+    analyzer.release_memory()
 
 
 def run_spod(data_file, prep, compute, plot):
@@ -63,6 +65,8 @@ def run_spod(data_file, prep, compute, plot):
         analyzer.plot_eig_complex_plane()
     if run_all:
         pass
+    print_summary("SPOD", analyzer.results_dir, analyzer.figures_dir)
+    analyzer.release_memory()
 
 
 def run_dmd(data_file, prep, compute, plot):
@@ -88,6 +92,8 @@ def run_dmd(data_file, prep, compute, plot):
         analyzer.plot_reconstruction_error()
     if run_all:
         pass
+    print_summary("DMD", analyzer.results_dir, analyzer.figures_dir)
+    analyzer.release_memory()
 
 
 def run_bsmd(data_file, prep, compute, plot):
@@ -113,6 +119,8 @@ def run_bsmd(data_file, prep, compute, plot):
         analyzer.plot_modes()
     if run_all:
         pass
+    print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
+    analyzer.release_memory()
 
 
 if __name__ == "__main__":
