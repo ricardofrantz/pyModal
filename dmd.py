@@ -262,7 +262,9 @@ class DMDAnalyzer(BaseAnalyzer):
         ax_growth.set_yscale("log")
         ax_growth.set_title("Amplitude vs growth rate")
 
-        fig.tight_layout()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            fig.tight_layout()
         fname_spec = os.path.join(self.figures_dir, f"{self.data_root}_dmd_eigenspectra.png")
         fig.savefig(fname_spec, dpi=FIG_DPI)
         plt.close(fig)
@@ -384,7 +386,9 @@ class DMDAnalyzer(BaseAnalyzer):
                     else:
                         header = f"{m + 1} (f={freq[m]:.2f})"
                     ax.set_title(header)
-        fig.tight_layout()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            fig.tight_layout()
         fname_modes = os.path.join(self.figures_dir, f"{self.data_root}_dmd_modes_detailed_{n_modes}_{var_name}.png")
         fig.savefig(fname_modes, dpi=FIG_DPI)
         plt.close(fig)
@@ -496,7 +500,9 @@ class DMDAnalyzer(BaseAnalyzer):
                     ax.set_ylabel("Amplitude")
                 ax.set_title(f"DMD Mode {i + 1} [{var_name}]")
 
-            fig.tight_layout()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                fig.tight_layout()
             fname = os.path.join(
                 self.figures_dir,
                 f"{self.data_root}_dmd_modes_{start + 1}_to_{end}_{var_name}.png",
