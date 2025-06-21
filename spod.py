@@ -13,6 +13,7 @@ import numpy as np
 from tqdm import tqdm
 
 from configs import (
+    CMAP_DIV,
     FIG_DPI,
     FIG_FORMAT,
     FIGURES_DIR_SPOD,
@@ -593,12 +594,21 @@ class SPODAnalyzer(BaseAnalyzer):
                             X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
                         else:
                             X, Y = x_coords, y_coords
-                        mode_plot = np.ma.array(mode_2d, mask=np.isnan(mode_2d))
-                        im = ax.contourf(X, Y, mode_plot, levels=60, cmap="bwr")
-                        ax.set_aspect("auto")
+                        dist = np.sqrt(X**2 + Y**2)
+                        cyl_mask = dist <= 0.5
+                        mode_plot = np.ma.array(mode_2d, mask=np.isnan(mode_2d) | cyl_mask)
+                        vmax = np.max(np.abs(mode_plot))
+                        levels = np.linspace(-vmax, vmax, 21)
+                        im = ax.contourf(X, Y, mode_plot, levels=levels, cmap=CMAP_DIV, extend="both")
+                        ax.contour(X, Y, mode_plot, levels=levels[::4], colors="k", linewidths=0.5, alpha=0.5)
+                        ax.add_patch(plt.Circle((0, 0), 0.5, facecolor="lightgray", edgecolor="black", linewidth=0.5))
+                        ax.set_aspect("equal", "box")
+                        ax.set_xlim(np.min(x_coords), np.max(x_coords))
+                        ax.set_ylim(np.min(y_coords), np.max(y_coords))
                         fig.colorbar(im, ax=ax, shrink=0.8, label=r"Re($\Phi$)")
-                        ax.set_xlabel("X")
-                        ax.set_ylabel("Y")
+                        ax.set_xlabel(r"$x/D$")
+                        ax.set_ylabel(r"$y/D$")
+                        ax.grid(True, linestyle="--", alpha=0.3)
                     else:
                         ax.plot(mode_real)
                         ax.set_xlabel("Spatial index")
