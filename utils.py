@@ -24,6 +24,7 @@ try:
         PARALLEL_AVAILABLE,
         blocksfft_optimized,
         calculate_polar_weights_optimized,
+        get_threadpool_summary,
         spod_single_frequency_optimized,
     )
 except Exception:
@@ -524,7 +525,8 @@ class BaseAnalyzer:
         if "q" not in self.data:
             raise ValueError("Data not loaded. Call load_and_preprocess() first.")
 
-        print(f"Computing FFT with {self.nblocks} blocks using {self.n_threads} threads on {FFT_BACKEND} backend...")
+        pools = get_threadpool_summary()
+        print(f"Computing FFT with {self.nblocks} blocks on {FFT_BACKEND} backend [pools: {pools}]")
         self.qhat = blocksfft(
             self.data["q"],
             self.nfft,

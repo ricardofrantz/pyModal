@@ -698,8 +698,9 @@ if __name__ == "__main__":
     parser.add_argument("--plot", action="store_true", help="Generate example plots")
     args = parser.parse_args()
 
-    threads_available = get_num_threads()
-    print(f"Available CPU threads detected: {threads_available}")
+    from parallel_utils import get_threadpool_summary
+
+    print(f"Thread pools: {get_threadpool_summary()}")
 
     print_optimization_status()
 
