@@ -344,8 +344,11 @@ class DNamiXNPZLoader(DataLoader):
         available_fields = None
         Nx = Ny = None
 
-        for f in files:
-            npz = np.load(f)
+        from utils import get_num_threads, parallel_map
+
+        npz_list = parallel_map(np.load, files, threads=get_num_threads())
+
+        for npz, f in zip(npz_list, files):
             if x is None:
                 x = npz["x"]
                 y = npz["y"]
