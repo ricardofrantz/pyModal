@@ -701,13 +701,15 @@ class SPODAnalyzer(BaseAnalyzer):
         if n_modes_max is None:
             n_modes_max = n_modes_avail
         n_modes_max = min(n_modes_max, n_modes_avail)
-        W = np.diag(self.W.flatten()) if self.W.ndim == 1 else self.W
+        W = np.diagflat(self.W) if self.W.ndim == 1 or self.W.shape[1] == 1 else self.W
         norm_orig = np.linalg.norm(qhat_f, "fro")
         errors = []
         mode_counts = range(1, n_modes_max + 1)
         for k in mode_counts:
             phi_k = modes_f[:, :k]
             coeffs = phi_k.conj().T @ W @ qhat_f
+            if coeffs.shape != (k, qhat_f.shape[1]):
+                raise ValueError(f"Coefficient matrix has unexpected shape: {coeffs.shape}, expected ({k}, {qhat_f.shape[1]})")
             qrec = phi_k @ coeffs
             errors.append(np.linalg.norm(qhat_f - qrec, "fro") / norm_orig)
         fig, ax = plt.subplots()
