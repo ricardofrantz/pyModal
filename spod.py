@@ -486,6 +486,8 @@ class SPODAnalyzer(BaseAnalyzer):
             np.broadcast_to(y_coords_mesh[:, None], (num_y_points_mesh, len(St_plot))),
             np.nan,
         )
+        # Mask NaNs to avoid matplotlib warnings when using LogNorm
+        C_fill_data = np.ma.masked_invalid(C_fill_data)
 
         norm_vmin = np.min(y_coords_mesh[y_coords_mesh > 0])
         norm_vmax = np.max(y_coords_mesh)
