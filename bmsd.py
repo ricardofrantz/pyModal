@@ -755,7 +755,7 @@ if __name__ == "__main__":
 
     print_optimization_status()
 
-    data_file = "./data/consolidated_data.npz"
+    data_file = "./data/snp1-947_u.npz"
 
     if DNamiXNPZLoader is not None and data_file.endswith(".npz"):
         loader = DNamiXNPZLoader()

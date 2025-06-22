@@ -778,7 +778,7 @@ if __name__ == "__main__":
     # data_file = "./data/jetLES_small.mat"  # Updated data path
     # data_file = "./data/jetLES.mat"  # Path to your data file
     # data_file = "./data/cavityPIV.mat"  # Path to your data file
-    data_file = "./data/consolidated_data.npz"
+    data_file = "./data/snp1-947_u.npz"
 
     # Default parameters
     nfft_param = 128  # FFT block size

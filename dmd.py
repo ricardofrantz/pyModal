@@ -578,7 +578,7 @@ if __name__ == "__main__":
         load_config(args.config)
 
     # Example: data_file = "./data/consolidated_data.npz"
-    data_file = "./data/consolidated_data.npz"
+    data_file = "./data/snp1-947_u.npz"
     n_modes_to_save_main = 8
     n_modes_to_plot_spatial_main = 8
     n_coeffs_to_plot_time_main = 8

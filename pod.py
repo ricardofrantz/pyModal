@@ -1133,8 +1133,7 @@ class PODAnalyzer(BaseAnalyzer):
         # Perform POD
         self.perform_pod()
 
-        # Identify correlated mode pairs before plotting
-        list(self.check_mode_pair_phase())
+        # Identify correlated mode pairs only when plotting
 
         # Save results
         self.save_results()  # This already calls super().save_results()
@@ -1223,10 +1222,8 @@ if __name__ == "__main__":
                 plot_n_modes_spatial=n_modes_to_plot_spatial_main,
                 plot_n_coeffs_time=n_coeffs_to_plot_time_main,
             )
-        if args.plot:
-            # Only load results if we haven't already computed them
-            if not args.compute:
-                analyzer.load_results()
+        elif args.plot:
+            analyzer.load_results()
             analyzer.plot_eigenvalues()
             analyzer.plot_modes_pair_detailed(plot_n_modes=n_modes_to_plot_spatial_main)
             analyzer.plot_modes_grid(energy_threshold=99.7)
@@ -1234,4 +1231,3 @@ if __name__ == "__main__":
             analyzer.plot_cumulative_energy()
             analyzer.plot_reconstruction_error()
             analyzer.plot_reconstruction_comparison()
-        print_summary("POD", analyzer.results_dir, analyzer.figures_dir)
