@@ -177,7 +177,19 @@ class BSMDAnalyzer(BaseAnalyzer):
                       and preprocessing.
     """
 
-    def __init__(self, file_path, nfft=128, overlap=0.5, results_dir=RESULTS_DIR_BSMD, figures_dir=FIGURES_DIR_BSMD, data_loader=None, spatial_weight_type="auto", use_static_triads=True, static_triads=ALL_TRIADS, use_parallel=True):
+    def __init__(
+        self,
+        file_path,
+        nfft=128,
+        overlap=0.5,
+        results_dir=RESULTS_DIR_BSMD,
+        figures_dir=FIGURES_DIR_BSMD,
+        data_loader=None,
+        spatial_weight_type="auto",
+        use_static_triads=True,
+        static_triads=ALL_TRIADS,
+        use_parallel=True,
+    ):
         """
         Initialize the BSMDAnalyzer.
 
@@ -424,7 +436,8 @@ class BSMDAnalyzer(BaseAnalyzer):
         # Map target Strouhal numbers to frequency indices
         # self.freq and self.St should be available from BaseAnalyzer.load_and_preprocess_data
         # Robustly recalculate self.freq and self.St if needed (handles cases where not set or mismatched)
-        if self.freq is None or self.St is None or (hasattr(self.qhat, "shape") and self.qhat.shape and ((not hasattr(self.freq, "size") or self.freq.size != self.qhat.shape[0]) or (not hasattr(self.St, "size") or self.St.size != self.qhat.shape[0]))):
+        cond_freq_mismatch = self.freq is None or self.St is None or (hasattr(self.qhat, "shape") and self.qhat.shape and ((not hasattr(self.freq, "size") or self.freq.size != self.qhat.shape[0]) or (not hasattr(self.St, "size") or self.St.size != self.qhat.shape[0])))
+        if cond_freq_mismatch:
             print("Recalculating frequency and Strouhal arrays to match qhat...")
             nfft = self.qhat.shape[0] if hasattr(self.qhat, "shape") and len(self.qhat.shape) > 0 else 0
             if nfft > 0:
@@ -563,7 +576,16 @@ class BSMDAnalyzer(BaseAnalyzer):
         """
         if fname is None:
             # Construct filename based on data and parameters
-            results_path = os.path.join(self.results_dir, make_result_filename(self.data_root, self.nfft, self.overlap, self.data["Ns"], "bsmd"))
+            results_path = os.path.join(
+                self.results_dir,
+                make_result_filename(
+                    self.data_root,
+                    self.nfft,
+                    self.overlap,
+                    self.data["Ns"],
+                    "bsmd",
+                ),
+            )
         else:
             results_path = os.path.join(self.results_dir, fname)
         # Ensure output directory exists
@@ -579,6 +601,152 @@ class BSMDAnalyzer(BaseAnalyzer):
             if self.energy_map.size:
                 f.create_dataset("energy_map", data=self.energy_map)
         print(f"Results saved to {results_path}")
+
+    def plot_eigenvalues(self):
+        """Plot BSMD eigenvalue magnitudes versus triad index."""
+        if self.eigenvalues.size == 0:
+            print("No BSMD eigenvalues to plot. Run perform_bsmd() first.")
+            return
+
+        lambdas = np.abs(self.eigenvalues)
+        fig, ax = plt.subplots()
+        ax.plot(lambdas, "o-")
+        ax.set_xlabel("Triad index")
+        ax.set_ylabel("Eigenvalue magnitude")
+        ax.set_title("BSMD eigenvalue magnitudes")
+        ax.grid(True)
+        fig.tight_layout()
+        fname = os.path.join(self.figures_dir, f"{self.data_root}_BSMD_eigenvalues.png")
+        plt.savefig(fname)
+        plt.close(fig)
+        print(f"Eigenvalue plot saved to {fname}")
+
+    def plot_eig_complex_plane(self):
+        """Plot eigenvalues in the complex plane."""
+        if self.eigenvalues.size == 0:
+            print("No BSMD eigenvalues to plot. Run perform_bsmd() first.")
+            return
+
+        vals = self.eigenvalues
+        fig, ax = plt.subplots()
+        ax.scatter(vals.real, vals.imag, marker="o")
+        ax.set_xlabel("Real(λ)")
+        ax.set_ylabel("Imag(λ)")
+        ax.set_title("BSMD eigenvalues (complex plane)")
+        ax.grid(True)
+        fig.tight_layout()
+        fname = os.path.join(self.figures_dir, f"{self.data_root}_BSMD_eig_complex_plane.png")
+        plt.savefig(fname)
+        plt.close(fig)
+        print(f"Complex plane plot saved to {fname}")
+
+    def plot_energy_plane(self):
+        """Plot eigenvalue magnitudes in the (St₁, St₂) plane with zoomed view."""
+        if self.eigenvalues.size == 0:
+            print("No BSMD eigenvalues to plot. Run perform_bsmd() first.")
+            return
+
+        triads_arr = np.array(self.triads)
+        fs = self.fs
+        nfft = self.nfft
+        st1_vals = triads_arr[:, 0] * fs / nfft
+        st2_vals = triads_arr[:, 1] * fs / nfft
+        lambda_mags = np.abs(self.eigenvalues)
+
+        log_lambda_mags = np.log10(lambda_mags + 1e-20)
+
+        st1_max = np.max(st1_vals)
+        st2_min = np.min(st2_vals)
+        st2_max = np.max(st2_vals)
+
+        idx_p2_zero = np.where(triads_arr[:, 1] == 0)[0]
+        if len(idx_p2_zero) > 0:
+            idx_max = idx_p2_zero[np.argmax(lambda_mags[idx_p2_zero])]
+            st0 = st1_vals[idx_max]
+        else:
+            st0 = fs / nfft
+
+        min_zoom = fs / nfft
+        zoom_st1_max = max(4 * st0, min_zoom)
+        zoom_st2_min = -zoom_st1_max
+        zoom_st2_max = zoom_st1_max
+
+        n_st1 = 100
+        n_st2 = 160
+        st1_grid = np.linspace(0, st1_max, n_st1)
+        st2_grid = np.linspace(st2_min, st2_max, n_st2)
+        ST1, ST2 = np.meshgrid(st1_grid, st2_grid)
+
+        st1_zoom_grid = np.linspace(0, zoom_st1_max, n_st1)
+        st2_zoom_grid = np.linspace(zoom_st2_min, zoom_st2_max, n_st2)
+        ST1_zoom, ST2_zoom = np.meshgrid(st1_zoom_grid, st2_zoom_grid)
+
+        log_lambda_grid = np.full(ST1.shape, np.nan)
+        log_lambda_zoom = np.full(ST1_zoom.shape, np.nan)
+
+        for st1, st2, log_mag in zip(st1_vals, st2_vals, log_lambda_mags):
+            if st1 >= 0 and st1 + st2 >= 0:
+                i_st1 = np.argmin(np.abs(st1_grid - st1))
+                i_st2 = np.argmin(np.abs(st2_grid - st2))
+                log_lambda_grid[i_st2, i_st1] = log_mag
+                if 0 <= st1 <= zoom_st1_max and zoom_st2_min <= st2 <= zoom_st2_max:
+                    i_st1_zoom = np.argmin(np.abs(st1_zoom_grid - st1))
+                    i_st2_zoom = np.argmin(np.abs(st2_zoom_grid - st2))
+                    log_lambda_zoom[i_st2_zoom, i_st1_zoom] = log_mag
+
+        finite_logs = log_lambda_mags[np.isfinite(log_lambda_mags)]
+        if len(finite_logs) > 0:
+            vmin = np.percentile(finite_logs, 1)
+            vmax = max(0, np.percentile(finite_logs, 99))
+        else:
+            vmin, vmax = -20, 0
+        if vmin >= vmax:
+            vmin = -1 if vmin == 0 else vmax - 1
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+        pcm1 = ax1.pcolormesh(ST1, ST2, log_lambda_grid, cmap="jet", vmin=vmin, vmax=vmax, shading="auto")
+        levels = np.linspace(vmin, vmax, 10)
+        contour_colors = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "gray", "cyan"]
+        ax1.contour(ST1, ST2, log_lambda_grid, levels=levels, colors=contour_colors, linewidths=0.5)
+        fig.colorbar(pcm1, ax=ax1, label=r"$\log(|\lambda|)$")
+        ax1.set_xlabel(r"$St_1$")
+        ax1.set_ylabel(r"$St_2$")
+        ax1.set_title("(a) Full Bispectrum")
+        ax1.set_xlim(0, st1_max)
+        ax1.set_ylim(st2_min, st2_max)
+
+        pcm2 = ax2.pcolormesh(ST1_zoom, ST2_zoom, log_lambda_zoom, cmap="jet", vmin=vmin, vmax=vmax, shading="auto")
+        fig.colorbar(pcm2, ax=ax2, label=r"$\log(|\lambda|)$")
+        ax2.set_xlabel(r"$St_1$")
+        ax2.set_ylabel(r"$St_2$")
+        ax2.set_title("(b) Low-Frequency Zoom")
+
+        m = 6
+        mask_zoom = (st1_vals >= 0) & (st1_vals <= zoom_st1_max) & (st2_vals >= zoom_st2_min) & (st2_vals <= zoom_st2_max)
+        triads_zoom = triads_arr[mask_zoom]
+        lambda_mags_zoom = lambda_mags[mask_zoom]
+        st1_zoom_vals = st1_vals[mask_zoom]
+        st2_zoom_vals = st2_vals[mask_zoom]
+        if len(lambda_mags_zoom) > 0:
+            top_idx = np.argsort(lambda_mags_zoom)[-m:][::-1]
+            top_triads = triads_zoom[top_idx]
+            top_st1 = st1_zoom_vals[top_idx]
+            top_st2 = st2_zoom_vals[top_idx]
+            for (p1, p2, _), st1, st2 in zip(top_triads, top_st1, top_st2):
+                ax2.plot(st1, st2, "ro", markersize=8, markerfacecolor="none")
+                ax2.text(st1, st2, f"({p1},{p2})", fontsize=8, ha="left", va="bottom")
+
+        st1_line = np.linspace(0, zoom_st1_max, 100)
+        st2_line = st0 - st1_line
+        ax2.plot(st1_line, st2_line, "k--", label=r"$St_1 + St_2 = St_0$")
+        ax2.legend()
+
+        fig.tight_layout()
+        fname = os.path.join(self.figures_dir, f"{self.data_root}_BSMD_eig_St1St2_plane.png")
+        plt.savefig(fname)
+        plt.close(fig)
+        print(f"Energy plane plot saved to {fname}")
 
     from typing import Optional
 
@@ -795,16 +963,9 @@ if __name__ == "__main__":
                 if analyzer.eigenvalues.size == 0:
                     print("No BSMD results to plot. Run with --compute first.")
                 else:
-                    lambdas = np.abs(analyzer.eigenvalues)
-                    plt.figure()
-                    plt.plot(lambdas, "o-")
-                    plt.xlabel("Triad index")
-                    plt.ylabel("Eigenvalue magnitude")
-                    plt.title("BSMD eigenvalue magnitudes")
-                    plt.grid(True)
-                    plt.tight_layout()
-                    plt.savefig(os.path.join(figures_dir, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
-                    plt.close()
+                    analyzer.plot_eigenvalues()
+                    analyzer.plot_eig_complex_plane()
+                    analyzer.plot_energy_plane()
                     analyzer.plot_modes()
                     analyzer.plot_energy_map()
             if run_all:
@@ -847,16 +1008,9 @@ if __name__ == "__main__":
             if analyzer.eigenvalues.size == 0:
                 print("No BSMD results to plot. Run with --compute first.")
             else:
-                lambdas = np.abs(analyzer.eigenvalues)
-                plt.figure()
-                plt.plot(lambdas, "o-")
-                plt.xlabel("Triad index")
-                plt.ylabel("Eigenvalue magnitude")
-                plt.title("BSMD eigenvalue magnitudes")
-                plt.grid(True)
-                plt.tight_layout()
-                plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
-                plt.close()
+                analyzer.plot_eigenvalues()
+                analyzer.plot_eig_complex_plane()
+                analyzer.plot_energy_plane()
                 analyzer.plot_modes()
                 analyzer.plot_energy_map()
 

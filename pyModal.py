@@ -116,6 +116,9 @@ def run_bsmd(data_file, prep, compute, plot):
     if run_all or plot:
         if analyzer.eigenvalues.size == 0:
             analyzer.load_results()
+        analyzer.plot_eigenvalues()
+        analyzer.plot_eig_complex_plane()
+        analyzer.plot_energy_plane()
         analyzer.plot_modes()
     if run_all:
         pass
