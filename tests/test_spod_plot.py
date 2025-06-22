@@ -53,11 +53,13 @@ def test_plot_modes_and_timecoeffs(tmp_path):
     analyzer.compute_fft_blocks()
     analyzer.perform_spod()
     analyzer.plot_modes(plot_n_modes=1)
-    st = analyzer.St[np.argmax(analyzer.eigenvalues[:, 0])]
-    expected_modes = tmp_path / f"dummy_SPOD_mode1_St{st:.4f}_q.png"
+    freq_idx = int(np.argmax(analyzer.eigenvalues[:, 0]))
+    expected_modes = tmp_path / f"dummy_SPOD_mode1_freq{freq_idx}_q.png"
     assert expected_modes.exists()
     analyzer.plot_time_coeffs()
-    expected_time = tmp_path / f"dummy_SPOD_timecoeffs_St{st:.4f}_nfft4_noverlap0.0.png"
+    expected_time = tmp_path / (
+        f"dummy_SPOD_timecoeffs_freq{freq_idx}_nfft4_noverlap0.0.png"
+    )
     assert expected_time.exists()
 
 
@@ -84,6 +86,8 @@ def test_plot_reconstruction_error(tmp_path):
     analyzer.compute_fft_blocks()
     analyzer.perform_spod()
     analyzer.plot_reconstruction_error()
-    st = analyzer.St[np.argmax(analyzer.eigenvalues[:, 0])]
-    expected = tmp_path / f"dummy_SPOD_reconstruction_error_St{st:.4f}_nfft4_noverlap0.0.png"
+    freq_idx = int(np.argmax(analyzer.eigenvalues[:, 0]))
+    expected = tmp_path / (
+        f"dummy_SPOD_reconstruction_error_freq{freq_idx}_nfft4_noverlap0.0.png"
+    )
     assert expected.exists()
