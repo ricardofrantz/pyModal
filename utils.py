@@ -519,8 +519,9 @@ class BaseAnalyzer:
 
     def load_and_preprocess(self):
         """Load data and calculate weights."""
-        # Load data from file
-        self.data = self.data_loader(self.file_path)
+        # Load data from file only if not already provided
+        if not self.data:
+            self.data = self.data_loader(self.file_path)
 
         # Calculate spatial weights
         if self.spatial_weight_type == "polar":
