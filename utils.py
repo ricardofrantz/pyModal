@@ -383,6 +383,24 @@ def auto_detect_weight_type(file_path):
     return di_auto_detect_weight_type(file_path)
 
 
+def _flatten_weights(w, expected_len):
+    """Return weights as a column vector matching ``expected_len``."""
+    w = np.asarray(w)
+    if w.ndim == 3:
+        if w.shape[0] != w.shape[1]:
+            raise ValueError("weight array's first two dimensions must be equal")
+        w = np.stack([np.diag(w[:, :, i]) for i in range(w.shape[2])], axis=1)
+    if w.ndim == 2:
+        if w.shape[0] == w.shape[1] and w.shape[1] != 1:
+            w = np.diag(w)
+        if w.shape[1] > 1:
+            w = w.reshape(-1, 1)
+    w = w.reshape(-1, 1)
+    if w.shape[0] != expected_len:
+        raise ValueError("Flattened weights length mismatch")
+    return w
+
+
 def spod_function(qhat, nblocks, dst, w, return_psi=False, use_parallel=True):
     """
     Compute SPOD modes and eigenvalues for a single frequency.
@@ -399,9 +417,10 @@ def spod_function(qhat, nblocks, dst, w, return_psi=False, use_parallel=True):
             psi (np.ndarray, optional): Time coefficients for this frequency [block, mode].
     """
     if use_parallel and PARALLEL_AVAILABLE:
+        w_col = _flatten_weights(w, qhat.shape[0])
         return spod_single_frequency_optimized(
             qhat,
-            w,
+            w_col,
             nblocks,
             dst,
             return_psi=return_psi,
@@ -409,8 +428,9 @@ def spod_function(qhat, nblocks, dst, w, return_psi=False, use_parallel=True):
 
     # Normalize FFT coefficients to get fluctuation matrix X_f for this frequency f.
     x = qhat / np.sqrt(nblocks * dst)
+    w_col = _flatten_weights(w, qhat.shape[0])
     # Compute the weighted cross-spectral density (CSD) matrix M_f.
-    xprime_w = np.transpose(np.conj(x)) * np.transpose(w)  # X_f^H * W
+    xprime_w = np.transpose(np.conj(x)) * np.transpose(w_col)  # X_f^H * W
     m = xprime_w @ x  # (X_f^H * W) * X_f = M_f
     del xprime_w
     # Solve the eigenvalue problem: M_f * Psi_f = Psi_f * Lambda_f

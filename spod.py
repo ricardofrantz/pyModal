@@ -267,7 +267,7 @@ class SPODAnalyzer(BaseAnalyzer):
     ############################################################
     # Core SPOD Computation                                    #
     ############################################################
-    def perform_spod(self):
+    def perform_spod(self, weights=None):
         """
         Performs the core SPOD analysis (eigenvalue decomposition for each frequency).
 
@@ -308,13 +308,14 @@ class SPODAnalyzer(BaseAnalyzer):
 
         print("Performing SPOD for each frequency...")
 
+        weights = weights if weights is not None else self.W
         for i in tqdm(range(num_freq_bins), desc="SPOD Computation", unit="freq"):
             qhat_freq = self.qhat[i, :, :]
             phi_freq, lambda_freq, psi_freq = spod_function(
                 qhat_freq,
                 self.nblocks,
                 self.dst,
-                self.W,
+                weights,
                 return_psi=True,
                 use_parallel=self.use_parallel,
             )
