@@ -245,6 +245,7 @@ class BSMDAnalyzer(BaseAnalyzer):
         self.modes2 = np.array([])
         self.freq = None
         self.St = None
+        self.energy_map = np.array([])
 
     def load_and_preprocess(self):
         """
@@ -505,6 +506,9 @@ class BSMDAnalyzer(BaseAnalyzer):
 
         print(f"Static BSMD core analysis completed in {time.time() - start_time:.2f} seconds.")
 
+        # Build energy map for quick visualisation
+        self.energy_map = self._compute_energy_map()
+
     def perform_dynamic_bsmd(self):
         """
         Perform BSMD with dynamically identified triads (Placeholder).
@@ -516,6 +520,21 @@ class BSMDAnalyzer(BaseAnalyzer):
         Currently, this method will raise a NotImplementedError.
         """
         raise NotImplementedError("Dynamic BSMD is not yet implemented.")
+
+    def _compute_energy_map(self):
+        """Return a 2D map of eigenvalue magnitudes indexed by (p1,p2)."""
+        if self.eigenvalues.size == 0:
+            return np.array([])
+
+        offset = 8
+        size = 2 * offset + 1
+        grid = np.full((size, size), np.nan)
+        for val, (p1, p2, _p3) in zip(np.abs(self.eigenvalues), self.triads):
+            i = int(p1) + offset
+            j = int(p2) + offset
+            if 0 <= i < size and 0 <= j < size:
+                grid[i, j] = val
+        return grid
 
     # Save triads, eigenvalues, modes, and weights to HDF5.
     def save_results(self, fname=None):
@@ -557,6 +576,8 @@ class BSMDAnalyzer(BaseAnalyzer):
             f.create_dataset("x", data=self.data["x"])
             f.create_dataset("y", data=self.data["y"])
             f.create_dataset("W", data=self.W)
+            if self.energy_map.size:
+                f.create_dataset("energy_map", data=self.energy_map)
         print(f"Results saved to {results_path}")
 
     from typing import Optional
@@ -671,6 +692,31 @@ class BSMDAnalyzer(BaseAnalyzer):
             plt.close(fig)
             print(f"BSMD mode plot saved to {fname}")
 
+    def plot_energy_map(self):
+        """Plot a 2D heatmap of eigenvalue magnitudes indexed by triad frequencies."""
+        if self.energy_map.size == 0:
+            print("No energy map available. Run perform_bsmd() first.")
+            return
+
+        extent = (-8.5, 8.5, -8.5, 8.5)
+        fig, ax = plt.subplots(figsize=(6, 5))
+        im = ax.imshow(
+            self.energy_map,
+            origin="lower",
+            extent=extent,
+            cmap=CMAP_SEQ,
+            aspect="equal",
+        )
+        ax.set_xlabel("p1 index")
+        ax.set_ylabel("p2 index")
+        ax.set_title("BSMD energy map |lambda|")
+        fig.colorbar(im, ax=ax, shrink=0.8)
+        fig.tight_layout()
+        fname = os.path.join(self.figures_dir, f"{self.data_root}_BSMD_energy_map.png")
+        plt.savefig(fname)
+        plt.close(fig)
+        print(f"Energy map saved to {fname}")
+
     # Execute the full BSMD pipeline.
     def run_analysis(self):
         """
@@ -760,6 +806,7 @@ if __name__ == "__main__":
                     plt.savefig(os.path.join(figures_dir, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
                     plt.close()
                     analyzer.plot_modes()
+                    analyzer.plot_energy_map()
             if run_all:
                 print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
         exit(0)
@@ -811,6 +858,7 @@ if __name__ == "__main__":
                 plt.savefig(os.path.join(FIGURES_DIR_BSMD, f"{analyzer.data_root}_BSMD_eigenvalues.png"))
                 plt.close()
                 analyzer.plot_modes()
+                analyzer.plot_energy_map()
 
         if run_all:
             print_summary("BSMD", analyzer.results_dir, analyzer.figures_dir)
