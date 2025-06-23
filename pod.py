@@ -703,7 +703,7 @@ class PODAnalyzer(BaseAnalyzer):
         plt.close(fig)
         print(f"Saving figure {plot_filename}")
 
-    def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None, L=None, U=None):
+    def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None, L=1.0, U=1.0):
         """Plot the temporal coefficients for selected modes.
 
         Displays the time evolution of the coefficients for the first `n_coeffs_to_plot` modes.
@@ -715,9 +715,14 @@ class PODAnalyzer(BaseAnalyzer):
             n_coeffs_to_plot (int, optional): Number of leading temporal coefficients to plot.
                 Defaults to 2.
             n_snapshots_plot (int, optional): Number of time snapshots to include in the plot.
-                If None, all snapshots are used. Defaults to None.
-            L (float, optional): Characteristic length scale for Strouhal conversion.
-            U (float, optional): Characteristic velocity for Strouhal conversion.
+                                              If None, all snapshots are used. Defaults to None.
+            L (float, optional): Characteristic length for Strouhal number conversion. Defaults to ``1.0``.
+            U (float, optional): Characteristic velocity for Strouhal number conversion. Defaults to ``1.0``.
+
+        The periodogram axis is always shown in terms of Strouhal number.  The
+        frequencies are converted according to ``freqs_st = freqs * L / U``.  With
+        the default ``L = U = 1`` the plot displays the unscaled frequencies but
+        labeled as Strouhal numbers.
         """
         if self.time_coefficients.size == 0:
             print("No time coefficients to plot. Run perform_pod() first.")
@@ -750,7 +755,6 @@ class PODAnalyzer(BaseAnalyzer):
             plt.xlim(time_vector.min(), time_vector.max())
 
             plt.subplot(n_coeffs_to_plot, 2, 2 * i + 2)
-
             freqs, psd = periodogram_rfft(coeff, self.fs)
             peak_freqs, peak_psd = find_peaks(freqs, psd)
             
