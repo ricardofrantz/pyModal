@@ -24,3 +24,15 @@ def test_parallel_loading_identical(tmp_path, monkeypatch):
     assert np.array_equal(data_seq['y'], data_par['y'])
     assert data_seq['dt'] == data_par['dt']
     assert data_seq['metadata']['loaded_files'] == data_par['metadata']['loaded_files']
+
+
+def test_dt_from_times(tmp_path):
+    x = np.array([0.0, 1.0])
+    y = np.array([0.0, 1.0])
+    arr = np.ones((2, 2, 2))
+    np.savez(tmp_path / 'file.npz', x=x, y=y, dt=0.01, times=np.array([0.0, 1.0]), u=arr)
+
+    loader = DNamiXNPZLoader()
+    data = loader.load(str(tmp_path / 'file.npz'), load_single=True)
+
+    assert data['dt'] == 1.0

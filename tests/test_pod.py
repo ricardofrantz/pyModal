@@ -1,6 +1,5 @@
 import numpy as np
 from scipy import signal
-
 from pod import PODAnalyzer
 
 
@@ -44,6 +43,7 @@ def test_plot_time_coefficients_strouhal(monkeypatch, tmp_path):
         data_loader=lambda _: data,
         spatial_weight_type="uniform",
         n_modes_save=2,
+
     )
     analyzer.load_and_preprocess()
     analyzer.perform_pod()
@@ -68,3 +68,4 @@ def test_plot_time_coefficients_strouhal(monkeypatch, tmp_path):
     freqs, _ = signal.periodogram(coeff, analyzer.fs, scaling="density")
     expected = freqs * 2.0 / 4.0
     assert np.allclose(x_data[0], expected)
+
