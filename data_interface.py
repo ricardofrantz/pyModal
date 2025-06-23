@@ -340,7 +340,6 @@ class DNamiXNPZLoader(DataLoader):
         q_list = []
         times_list = []
         x = y = None
-        dt = None
         available_fields = None
         Nx = Ny = None
 
@@ -356,9 +355,7 @@ class DNamiXNPZLoader(DataLoader):
                     x = x[:, 0]
                 if y.ndim == 2:
                     y = y[0, :]
-            if dt is None and "dt" in npz:
-                dt_val = npz["dt"]
-                dt = float(np.mean(dt_val)) if dt_val.size > 0 else None
+            # Ignore stored 'dt' field; compute from times instead
             if available_fields is None:
                 available_fields = [k for k in ("u", "v", "p") if k in npz]
             if field is None:
@@ -378,13 +375,13 @@ class DNamiXNPZLoader(DataLoader):
         q = np.concatenate(q_list, axis=0)
         times = np.concatenate(times_list)
         Ns = times.shape[0]
-        if dt is None:
-            if len(times) > 1:
-                diffs = np.diff(times)
-                diffs = diffs[np.nonzero(diffs)]
-                dt = float(np.mean(diffs)) if diffs.size > 0 else 1.0
-            else:
-                dt = 1.0
+        if len(times) > 1:
+            diffs = np.diff(times)
+            diffs = diffs[np.nonzero(diffs)]
+            dt_from_times = float(np.mean(diffs)) if diffs.size > 0 else 1.0
+        else:
+            dt_from_times = 1.0
+        dt = dt_from_times
         print(f"   Processed shape: q={q.shape}, Nx={Nx}, Ny={Ny}, Ns={Ns}, dt={dt}, field={field}")
         return {
             "q": q,
