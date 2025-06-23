@@ -9,6 +9,9 @@ pyModal is the only open-source package to combine POD + SPOD and BSMD in a sing
 - **Proper Orthogonal Decomposition (POD)**
   Performs a weighted singular value decomposition of mean-subtracted snapshots
   to recover energy-ranked spatial modes and their temporal coefficients.
+  Periodograms of the time coefficients are plotted in Hertz using the
+  sampling interval `dt`. Multiply the frequency axis by `L/U` to express
+  results in the dimensionless Strouhal number when physical scales are known.
 
 - **Spectral Proper Orthogonal Decomposition (SPOD)**
   Solves the cross-spectral density eigenvalue problem to yield energy-ranked,
