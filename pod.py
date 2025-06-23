@@ -703,7 +703,7 @@ class PODAnalyzer(BaseAnalyzer):
         plt.close(fig)
         print(f"Saving figure {plot_filename}")
 
-    def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None):
+    def plot_time_coefficients(self, n_coeffs_to_plot=2, n_snapshots_plot=None, L=None, U=None):
         """Plot the temporal coefficients for selected modes.
 
         Displays the time evolution of the coefficients for the first `n_coeffs_to_plot` modes.
@@ -713,9 +713,11 @@ class PODAnalyzer(BaseAnalyzer):
 
         Args:
             n_coeffs_to_plot (int, optional): Number of leading temporal coefficients to plot.
-                                            Defaults to 2.
+                Defaults to 2.
             n_snapshots_plot (int, optional): Number of time snapshots to include in the plot.
-                                              If None, all snapshots are used. Defaults to None.
+                If None, all snapshots are used. Defaults to None.
+            L (float, optional): Characteristic length scale for Strouhal conversion.
+            U (float, optional): Characteristic velocity for Strouhal conversion.
         """
         if self.time_coefficients.size == 0:
             print("No time coefficients to plot. Run perform_pod() first.")
@@ -748,8 +750,13 @@ class PODAnalyzer(BaseAnalyzer):
             plt.xlim(time_vector.min(), time_vector.max())
 
             plt.subplot(n_coeffs_to_plot, 2, 2 * i + 2)
+
             freqs, psd = periodogram_rfft(coeff, self.fs)
             peak_freqs, peak_psd = find_peaks(freqs, psd)
+            
+            if L is not None and U is not None:
+                freqs = freqs * L / U
+            xlabel = "Strouhal Number (St)"
             plt.semilogy(freqs, psd)
             if peak_freqs.size > 0:
                 plt.plot(peak_freqs, peak_psd, "o")
@@ -758,7 +765,7 @@ class PODAnalyzer(BaseAnalyzer):
             plt.xscale("log")
             plt.xlim(1e-1, 1e4)
             plt.ylim(1e-6, None)
-            plt.xlabel("Frequency")
+            plt.xlabel(xlabel)
             plt.ylabel("PSD")
             plt.title(f"Periodogram Mode {i + 1}")
             plt.grid(True, linestyle=":")

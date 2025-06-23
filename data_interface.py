@@ -2,8 +2,8 @@
 """
 Modular Data Interface for Modal Decomposition
 
-This module provides a unified interface for loading different data formats
-(.mat, .h5, .cgns, etc.) with consistent output structure for all analysis methods.
+This module provides a simple interface for loading ``.mat`` and ``.npz`` files
+with a consistent output structure for all analysis methods.
 
 The goal is to have a single place to add new data format support, and all
 analysis methods (POD, SPOD, BSMD) will automatically work with the new format.
@@ -150,168 +150,40 @@ class MATDataLoader(DataLoader):
         print(f"   Processed shape: q={q_reshaped.shape}, Nx={Nx}, Ny={Ny}, Nz={Nz}, Ns={Ns}")
         return {"q": q_reshaped, "x": x_vec, "y": y_vec, "z": z_vec, "dt": dt, "Nx": Nx, "Ny": Ny, "Nz": Nz, "Ns": Ns, "metadata": {"format": "mat", "original_shape": q.shape, "file_path": file_path, "var_name": var_name}}
 
-    def _reshape_to_standard_format(self, q: np.ndarray, Nx: int, Ny: int, Nz: int) -> np.ndarray:
-        """Reshape data array to standard (Ns, Nspace) format."""
-        if q.ndim == 2:
-            # Already 2D - check if it's (Ns, Nspace) or (Nspace, Ns)
-            if q.shape[1] == Nx * Ny * Nz:
-                return q  # Already correct format
-            elif q.shape[0] == Nx * Ny * Nz:
-                return q.T  # Transpose to correct format
-            else:
-                raise ValueError(f"Cannot interpret 2D data shape {q.shape} with spatial dimensions {Nx}×{Ny}×{Nz}")
-
-        elif q.ndim == 3:
-            # Try different permutations to find (Ns, Nx, Ny)
-            for axes in [(0, 1, 2), (2, 0, 1), (2, 1, 0), (0, 2, 1), (1, 0, 2), (1, 2, 0)]:
-                try:
-                    arr = np.transpose(q, axes)
-                    if arr.shape[1:] == (Nx, Ny):
-                        return arr.reshape(arr.shape[0], Nx * Ny)
-                except Exception:
-                    continue
-
-            # Special case: (Nx, Ny, Ns) - common in some formats
-            if q.shape[:2] == (Nx, Ny):
-                return np.transpose(q, (2, 0, 1)).reshape(q.shape[2], Nx * Ny)
-
-            raise ValueError(f"Cannot interpret 3D data shape {q.shape} with spatial dimensions {Nx}×{Ny}")
-
-        elif q.ndim == 4:
-            # 4D data (Ns, Nx, Ny, Nz) or similar
-            for axes in [(0, 1, 2, 3), (3, 0, 1, 2), (3, 2, 1, 0)]:
-                try:
-                    arr = np.transpose(q, axes)
-                    if arr.shape[1:] == (Nx, Ny, Nz):
-                        return arr.reshape(arr.shape[0], Nx * Ny * Nz)
-                except Exception:
-                    continue
-
-            raise ValueError(f"Cannot interpret 4D data shape {q.shape} with spatial dimensions {Nx}×{Ny}×{Nz}")
-
-        else:
-            raise ValueError(f"Unsupported data dimensionality: {q.ndim}D")
-
-
-class HDF5DataLoader(DataLoader):
-    """Loader for HDF5/JetLES format files."""
-
-    def supports_format(self, file_path: str) -> bool:
-        """Check if file is an HDF5 file."""
-        return file_path.lower().endswith((".h5", ".hdf5")) or "jet" in file_path.lower()
-
-    def load(self, file_path: str, **kwargs) -> Dict[str, Any]:
-        """Load data from HDF5 file with JetLES format."""
-        file_size = format_file_size(file_path)
-        print(f"📂 Loading HDF5/JetLES data from {file_path} ({file_size})")
-
-        with h5py.File(file_path, "r") as fread:
-            # JetLES format specifics
-            q = fread["p"][:]  # pressure field
-            x = fread["x"][:, 0]  # x-coordinates (axial)
-            y = fread["r"][0, :]  # y-coordinates (radial)
-            dt = fread["dt"][0][0]  # time step
-
-        # Transpose q: original (Nx, Ny, Ns) -> (Ns, Nx, Ny)
-        q = np.transpose(q, (2, 0, 1))
-        Nx, Ny = len(x), len(y)
-        Ns = q.shape[0]
-        q_reshaped = q.reshape(Ns, Nx * Ny)
-
-        print(f"   Processed shape: q={q_reshaped.shape}, Nx={Nx}, Ny={Ny}, Ns={Ns}")
-
-        return {"q": q_reshaped, "x": x, "y": y, "z": None, "dt": dt, "Nx": Nx, "Ny": Ny, "Nz": 1, "Ns": Ns, "metadata": {"format": "hdf5_jetles", "original_shape": (Nx, Ny, Ns), "file_path": file_path}}
-
-
-class CGNSDataLoader(DataLoader):
-    """Loader for CGNS files - placeholder for future implementation."""
-
-    def supports_format(self, file_path: str) -> bool:
-        """Check if file is a CGNS file."""
-        return file_path.lower().endswith(".cgns")
-
-    def load(self, file_path: str, **kwargs) -> Dict[str, Any]:
-        """Load data from CGNS file."""
-        file_size = format_file_size(file_path)
-        print(f"📂 Loading CGNS data from {file_path} ({file_size})")
-
-        # TODO: Implement CGNS loading using python-cgns or similar
-        # This is where you'll add CGNS support later
-
-        # Placeholder implementation
-        raise NotImplementedError("CGNS support not yet implemented. To add CGNS support, implement the loading logic here and ensure output follows the standard format.")
-
-        # Template for what the implementation should return:
-        return {
-            "q": None,  # np.ndarray (Ns, Nspace)
-            "x": None,  # np.ndarray (Nx,)
-            "y": None,  # np.ndarray (Ny,)
-            "z": None,  # np.ndarray (Nz,) or None
-            "dt": None,  # float
-            "Nx": None,  # int
-            "Ny": None,  # int
-            "Nz": None,  # int
-            "Ns": None,  # int
-            "metadata": {
-                "format": "cgns",
-                "file_path": file_path,
-                # Add CGNS-specific metadata here
-            },
-        }
-
 
 class DataInterfaceManager:
-    """
-    Manager class that automatically selects the appropriate data loader
-    based on file format and provides a unified interface for all analysis methods.
-    """
+    """Select and run the appropriate loader based on file extension."""
 
-    def __init__(self):
-        """Initialize with all available data loaders."""
-        self.loaders = [
-            MATDataLoader(),
-            HDF5DataLoader(),
-            CGNSDataLoader(),
-            DNamiXNPZLoader(),
-            # Add new loaders here in the future
-        ]
+    def __init__(self) -> None:
+        self.loaders = [MATDataLoader(), DNamiXNPZLoader()]
 
     def load_data(self, file_path: str, loader_type: Optional[str] = None, **kwargs) -> Dict[str, Any]:
-        """
-        Load data using automatic format detection or specified loader.
-        Parameters:
-        -----------
-        file_path : str
-            Path to the data file
-        loader_type : str, optional
-            Force specific loader ('mat', 'hdf5', 'cgns')
-        Returns:
-        --------
-        dict
-            Standardized data format for all analysis methods
-        """
+        """Load ``file_path`` with the matching loader."""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Data file not found: {file_path}")
-        # If specific loader requested
+
         if loader_type:
-            loader_map = {
-                "mat": MATDataLoader,
-                "hdf5": HDF5DataLoader,
-                "cgns": CGNSDataLoader,
-                "dnamiX_npz": DNamiXNPZLoader,
-            }
+            loader_map = {"mat": MATDataLoader, "dnamiX_npz": DNamiXNPZLoader}
             if loader_type not in loader_map:
                 raise ValueError(f"Unknown loader type: {loader_type}")
             loader = loader_map[loader_type]()
             return loader.load(file_path, **kwargs)
-        # Auto-detect format
+
         for loader in self.loaders:
             if loader.supports_format(file_path):
                 return loader.load(file_path, **kwargs)
-        # No suitable loader found
-        file_ext = os.path.splitext(file_path)[1].lower()
-        supported_formats = [".mat", ".h5", ".hdf5", ".cgns", ".npz"]
-        raise ValueError(f"No loader found for file extension '{file_ext}'. Supported formats: {supported_formats}")
+
+        ext = os.path.splitext(file_path)[1].lower()
+        supported_formats = [".mat", ".npz"]
+        raise ValueError(f"No loader found for file extension '{ext}'. Supported formats: {supported_formats}")
+
+    def get_weight_type(self, data: Dict[str, Any], file_path: str) -> str:
+        """Return spatial weight type for ``file_path``."""
+        return "uniform"
+
+    def list_supported_formats(self) -> Dict[str, str]:
+        """Return dictionary of supported formats and their descriptions."""
+        return {".mat": "MATLAB data files", ".npz": "NumPy compressed arrays"}
 
 
 class DNamiXNPZLoader(DataLoader):
@@ -340,7 +212,6 @@ class DNamiXNPZLoader(DataLoader):
         q_list = []
         times_list = []
         x = y = None
-        dt = None
         available_fields = None
         Nx = Ny = None
 
@@ -356,9 +227,7 @@ class DNamiXNPZLoader(DataLoader):
                     x = x[:, 0]
                 if y.ndim == 2:
                     y = y[0, :]
-            if dt is None and "dt" in npz:
-                dt_val = npz["dt"]
-                dt = float(np.mean(dt_val)) if dt_val.size > 0 else None
+            # Ignore stored 'dt' field; compute from times instead
             if available_fields is None:
                 available_fields = [k for k in ("u", "v", "p") if k in npz]
             if field is None:
@@ -378,13 +247,13 @@ class DNamiXNPZLoader(DataLoader):
         q = np.concatenate(q_list, axis=0)
         times = np.concatenate(times_list)
         Ns = times.shape[0]
-        if dt is None:
-            if len(times) > 1:
-                diffs = np.diff(times)
-                diffs = diffs[np.nonzero(diffs)]
-                dt = float(np.mean(diffs)) if diffs.size > 0 else 1.0
-            else:
-                dt = 1.0
+        if len(times) > 1:
+            diffs = np.diff(times)
+            diffs = diffs[np.nonzero(diffs)]
+            dt_from_times = float(np.mean(diffs)) if diffs.size > 0 else 1.0
+        else:
+            dt_from_times = 1.0
+        dt = dt_from_times
         print(f"   Processed shape: q={q.shape}, Nx={Nx}, Ny={Ny}, Ns={Ns}, dt={dt}, field={field}")
         return {
             "q": q,
@@ -403,66 +272,6 @@ class DNamiXNPZLoader(DataLoader):
                 "available_fields": available_fields,
                 "loaded_files": files,
             },
-        }
-
-    def load_data(self, file_path: str, loader_type: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Load data using automatic format detection or specified loader.
-
-        Parameters:
-        -----------
-        file_path : str
-            Path to the data file
-        loader_type : str, optional
-            Force specific loader ('mat', 'hdf5', 'cgns')
-
-        Returns:
-        --------
-        dict
-            Standardized data format for all analysis methods
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Data file not found: {file_path}")
-
-        # If specific loader requested
-        if loader_type:
-            loader_map = {"mat": MATDataLoader, "hdf5": HDF5DataLoader, "cgns": CGNSDataLoader}
-            if loader_type not in loader_map:
-                raise ValueError(f"Unknown loader type: {loader_type}")
-
-            loader = loader_map[loader_type]()
-            return loader.load(file_path)
-
-        # Auto-detect format
-        for loader in self.loaders:
-            if loader.supports_format(file_path):
-                return loader.load(file_path)
-
-        # No suitable loader found
-        file_ext = os.path.splitext(file_path)[1].lower()
-        supported_formats = [".mat", ".h5", ".hdf5", ".cgns"]
-        raise ValueError(f"No loader found for file extension '{file_ext}'. Supported formats: {supported_formats}")
-
-    def get_weight_type(self, data: Dict[str, Any], file_path: str) -> str:
-        """
-        Always return 'uniform' for dNamiX consolidated .npz files (Cartesian mesh), else use legacy logic.
-        """
-        if file_path.lower().endswith(".npz") or data.get("metadata", {}).get("format") == "dnamiX_npz":
-            return "uniform"
-        # --- legacy/other logic ---
-        if "cavity" in file_path.lower():
-            return "uniform"
-        elif "jet" in file_path.lower() or data["metadata"].get("format") == "hdf5_jetles":
-            return "polar"
-        else:
-            return "uniform"
-
-    def list_supported_formats(self) -> Dict[str, str]:
-        """Return dictionary of supported formats and their descriptions."""
-        return {
-            ".mat": "MATLAB data files",
-            ".h5/.hdf5": "HDF5 format (including JetLES)",
-            ".cgns": "CGNS format (future implementation)",
         }
 
 
@@ -500,8 +309,8 @@ def get_weight_type(data: Dict[str, Any], file_path: str) -> str:
 
 
 def load_jetles_data(file_path: str, **kwargs) -> Dict[str, Any]:
-    """Legacy compatibility function for JetLES data."""
-    return load_data(file_path, loader_type="hdf5", **kwargs)
+    """Legacy alias for ``load_mat_data``."""
+    return load_mat_data(file_path, **kwargs)
 
 
 def load_mat_data(file_path: str, **kwargs) -> Dict[str, Any]:
@@ -510,7 +319,5 @@ def load_mat_data(file_path: str, **kwargs) -> Dict[str, Any]:
 
 
 def auto_detect_weight_type(file_path: str) -> str:
-    """Legacy compatibility function for weight detection."""
-    # For backward compatibility, we need to load the data first
-    data = load_data(file_path)
-    return get_weight_type(data, file_path)
+    """Return spatial weight type for ``file_path``."""
+    return "uniform"
