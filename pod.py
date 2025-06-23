@@ -27,7 +27,6 @@ import matplotlib.pyplot as plt
 # Third-party imports
 import numpy as np
 import scipy.linalg  # For eigh
-from scipy import signal
 
 from configs import (
     CMAP_DIV,
@@ -36,6 +35,7 @@ from configs import (
     FIGURES_DIR_POD,
     RESULTS_DIR_POD,
 )
+from fft.spectral_utils import find_peaks, periodogram_rfft
 from parallel_utils import print_optimization_status
 
 # Local application/library specific imports
@@ -750,13 +750,18 @@ class PODAnalyzer(BaseAnalyzer):
             plt.xlim(time_vector.min(), time_vector.max())
 
             plt.subplot(n_coeffs_to_plot, 2, 2 * i + 2)
-            freqs, psd = signal.periodogram(coeff, self.fs, scaling="density")
+
+            freqs, psd = periodogram_rfft(coeff, self.fs)
+            peak_freqs, peak_psd = find_peaks(freqs, psd)
+            
             if L is not None and U is not None:
                 freqs = freqs * L / U
-                xlabel = "Strouhal Number (St)"
-            else:
-                xlabel = "Frequency"
+            xlabel = "Strouhal Number (St)"
             plt.semilogy(freqs, psd)
+            if peak_freqs.size > 0:
+                plt.plot(peak_freqs, peak_psd, "o")
+                for pf, pv in zip(peak_freqs, peak_psd):
+                    plt.text(pf, pv, f"{pf:.2f}", fontsize=8, ha="left", va="bottom")
             plt.xscale("log")
             plt.xlim(1e-1, 1e4)
             plt.ylim(1e-6, None)
