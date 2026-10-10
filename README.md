@@ -1,3 +1,5 @@
+> **pyModal is archived and no longer maintained. Use [openmodalpy](https://github.com/openfluids/openmodalpy) instead.** It is on PyPI as `openmodalpy`.
+
 ```
 ██████╗ ██╗   ██╗███╗   ███╗ ██████╗ ██████╗  █████╗ ██╗
 ██╔══██╗╚██╗ ██╔╝████╗ ████║██╔═══██╗██╔══██╗██╔══██╗██║
